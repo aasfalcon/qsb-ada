@@ -1,0 +1,32 @@
+abstract project Basic_Executable extends "basic_project" is
+
+   Main_Filename := Target & ".adb";
+   for Main use (Main_Filename);
+
+   for Exec_Dir use Output_Dir;
+   for Source_Dirs use ();
+
+   ------------
+   -- Linker --
+   ------------
+
+   package Linker is
+
+      Common_Switches := ("-L" & Output_Dir);
+
+      case Build is
+         when "Release" =>
+            for Default_Switches ("Ada") use Common_Switches;
+
+         when "Debug" =>
+            for Default_Switches ("Ada") use Common_Switches &
+               ("-g");
+
+         when "Profile" =>
+            for Default_Switches ("Ada") use Common_Switches &
+               ("-pg", "-g");
+      end case;
+
+   end Linker;
+
+end Basic_Executable;

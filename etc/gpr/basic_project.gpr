@@ -1,0 +1,71 @@
+abstract project Basic_Project is
+
+   type Build_Type is ("Debug", "Release", "Profile");
+   Build : Build_Type := External("BUILD_TYPE", "Debug");
+
+   type System_Name_Type is ("Linux", "Windows", "Darwin");
+   System_Name : System_Name_Type := External("SYSTEM_NAME", "Linux");
+
+   Source_Dir := external ("SOURCE_DIR", "src") & "/";
+   Build_Dir := external ("BUILD_DIR", "obj") & "/";
+   Output_Dir := external ("OUTPUT_DIR", "lib") & "/";
+   ALI_Dir := external ("ALI_DIR", "ali") & "/";
+
+   Target := external ("TARGET");
+
+   for Languages use ("Ada");
+   for Source_Dirs use ();
+
+   -------------
+   -- Builder --
+   -------------
+
+   package Builder is
+
+      for Default_Switches ("Ada") use ("-m", "-j0");
+
+   end Builder;
+
+   --------------
+   -- Compiler --
+   --------------
+
+   package Compiler is
+
+      Common_Switches := ("-gnatef", "-gnat12", "-gnaty", "-gnatQ", "-gnata");
+
+      case Build is
+         when "Debug" =>
+            for Default_Switches ("Ada") use Common_Switches &
+               ("-g", "-gnatVa", "-gnatwaCJI", "-gnatwe", "-gnatyg");
+
+         when "Profile" =>
+            for Default_Switches ("Ada") use Common_Switches &
+               ("-pg", "-g");
+
+         when "Release" =>
+            for Default_Switches ("Ada") use Common_Switches &
+               ("-O2", "-gnatn", "-gnatws");
+      end case;
+
+   end Compiler;
+
+   ------------
+   -- Binder --
+   ------------
+
+   package Binder is
+
+      Common_Switches := ("-I" & ALI_Dir, "-E", "-static");
+
+      case Build is
+         when "Debug" =>
+            for Default_Switches ("Ada") use Common_Switches & ("-Sin");
+
+         when "Profile" | "Release" =>
+            for Default_Switches ("Ada") use Common_Switches;
+      end case;
+
+   end Binder;
+
+end Basic_Project;
