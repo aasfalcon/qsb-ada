@@ -2,11 +2,11 @@ with Sound_Test;
 
 package body Test_Suite is
 
-   function Suite return Access_Test_Suite is
-      Result : constant Access_Test_Suite := New_Suite;
+   function Suite return Handle is
    begin
-      Result.Add_Test (Sound_Test.Suite);
-      return Result;
+      return Result : constant Handle := AUnit.Test_Suites.New_Suite do
+         Result.Add_Test (Sound_Test.Suite);
+      end return;
    end Suite;
 
 end Test_Suite;

@@ -1,14 +1,12 @@
 with Ada.Containers.Vectors;
 
-with AUnit.Test_Fixtures; use AUnit.Test_Fixtures;
-
 with Common.Random;
 
 with Sound.Bus;
 with Sound.Events;
 with Sound.Processor;
 
-package Sound_Bus_Test_Fixture is
+package Fixture.Sound_Bus_Test is
 
    use Sound, Sound.Events;
 
@@ -70,4 +68,4 @@ private
    overriding
    procedure Analyze_Data (This : in out Instance; E : Data_Event);
 
-end Sound_Bus_Test_Fixture;
+end Fixture.Sound_Bus_Test;

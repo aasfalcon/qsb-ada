@@ -1,140 +1,249 @@
-with Sound.Bus;
-
 package body Sound.Processor is
 
-   Id_Pool : Tag := 0;
+   Id_Pool : Receiver_Tag := Empty_Id;
 
+   overriding
    procedure Initialize (This : in out Instance) is
    begin
       Parent (This).Initialize;
       Id_Pool := Id_Pool + 1;
       This.Id := Id_Pool;
-      This.Bus := null;
-      This.Super := null;
-      This.Subs.Clear;
-      This.Set_Subs_Rules (Serial, Before);
    end Initialize;
 
-   function Get_Bus (This : Instance)
-      return Bus.Handle is (This.Bus);
-
-   procedure Set_Bus (This : in out Instance; Value : Bus.Handle) is
+   overriding
+   procedure Finalize (This : in out Instance) is
    begin
-      This.Bus := Value;
-   end Set_Bus;
+      This.Disconnect;
+   end Finalize;
 
+   function Get (This : Instance; Parameter : Parameter_Slot) return Value is
+   begin
+      case Parameters.To_Enum (Parameter) is
+         when Id =>
+            return (Int, Integer (This.Id));
+
+         when Index =>
+            return (Int, This.Index);
+
+         when Is_Muted =>
+            return (Bool, This.Is_Muted);
+
+         when Is_Bypassed =>
+            return (Bool, This.Is_Bypassed);
+
+         when Is_Parallel =>
+            return (Bool, This.Is_Parallel);
+
+         when Is_Subs_Before =>
+            return (Bool, This.Is_Subs_Before);
+
+         when Super_Id =>
+            begin
+               return (Int, Integer (This.Super.Get_Id));
+            exception
+               when Constraint_Error =>
+                  return (Int, Integer (Empty_Id));
+            end;
+      end case;
+--    exception
+--       when Constraint_Error =>
+--          return Parent (This).Get (Parameter);
+   end Get;
+
+   overriding
+   procedure Set (This : in out Instance; Parameter : Parameter_Slot;
+                  Argument : Value) is
+   begin
+      case Parameters.To_Enum (Parameter) is
+         when Id =>
+            raise Program_Error with "Parameter 'Id' is read-only";
+
+         when Index =>
+            if This.Super /= null then
+               This.Super.Subs.Delete (This.Index);
+               This.Index := Argument.Int;
+               This.Super.Subs.Insert (This.Index, This'Unchecked_Access);
+            end if;
+
+         when Is_Muted =>
+            This.Is_Muted := Argument.Bool;
+
+         when Is_Bypassed =>
+            This.Is_Bypassed := Argument.Bool;
+
+         when Is_Parallel =>
+            This.Is_Parallel := Argument.Bool;
+
+         when Is_Subs_Before =>
+            This.Is_Subs_Before := Argument.Bool;
+
+         when Super_Id =>
+            declare
+               Super : constant Processor.Handle :=
+                  Processor.Handle (This.Bus.Get_Receiver
+                                    (Receiver_Tag (Argument.Int)));
+               Above : Processor.Handle := Super;
+            begin
+               while Above /= null loop
+                  if Above = This'Unchecked_Access then
+                     raise Program_Error with "Can't set one of subs as super";
+                  end if;
+
+                  Above := Above.Super;
+               end loop;
+
+               if This.Super /= null then
+                  This.Super.Subs.Delete (This.Index);
+               end if;
+
+               This.Super := Super;
+
+               if This.Super /= null then
+                  This.Super.Subs.Append (This'Unchecked_Access);
+                  This.Index := This.Super.Subs.Last_Index;
+               else
+                  This.Index := 0;
+               end if;
+            end;
+      end case;
+--    exception --  dispatch to parent
+--       when Constraint_Error =>
+--          Parent (This).Set (Parameter, Argument);
+   end Set;
+
+   overriding
+   procedure Run (This : in out Instance; Command : Command_Slot;
+                  Argument : Value := Empty_Value) is
+   begin
+      case Commands.To_Enum (Command) is
+         when Expose =>
+            for P in Parameter loop
+               declare
+                  Slot : constant Parameter_Slot := Parameters.To_Slot (P);
+               begin
+                  This.Emit (Slot, This.Get (Slot));
+               end;
+            end loop;
+
+         when Expose_One =>
+            declare
+               P : constant Parameter_Slot := Parameter_Slot (Argument.Int);
+            begin
+               This.Emit (P, This.Get (P));
+            end;
+
+         when Destroy =>
+            null; --  TODO: destroy all
+
+         when Show_Subs =>
+            null; -- TODO: show subs ids in Emit_Data
+      end case;
+--    exception --  dispatch to parent
+--       when Constraint_Error =>
+--          Parent (This).Run (Command, Arg);
+   end Run;
+
+   procedure Connect (This : in out Instance; Bus : Sound.Bus.Handle) is
+      use Sound.Bus;
+   begin
+      if This.Bus /= Bus then
+         This.Disconnect;
+         This.Bus := Bus;
+         This.Bus.Connect (This'Unchecked_Access);
+         This.Emit (Signals.To_Slot (Connect));
+      end if;
+   end Connect;
+
+   procedure Disconnect (This : in out Instance) is
+      use Sound.Bus;
+   begin
+      if This.Bus /= null then
+         This.Emit (Signals.To_Slot (Disconnect));
+         This.Bus.Disconnect (This'Unchecked_Access);
+         This.Bus := null;
+      end if;
+   end Disconnect;
+
+   overriding
    function Get_Id (This : Instance)
-      return Tag is  (This.Id);
+      return Receiver_Tag is (This.Id);
 
-   function Get_Index (This : Instance) return Positive is
+   procedure Emit (This : Instance; Parameter : Parameter_Slot;
+                   Argument : Value := Empty_Value) is
    begin
-      if This.Super = null then
-         raise Constraint_Error with "Trying to get index of orphan item";
-      end if;
+      This.Bus.Emit (This.Id, Parameter, Argument);
+   end Emit;
 
-      return This.Index;
-   end Get_Index;
-
-   procedure Set_Index (This : in out Instance; Value : Natural) is
-   begin
-      This.Super.Subs.Swap (This.Index, Value);
-      This.Index := Value;
-   end Set_Index;
-
-   function Get_Sub (This : Instance; Index : Positive)
-      return Handle is (This.Subs.Element (Index));
-
-   function Get_Sub_Count (This : Instance)
-      return Natural is (Natural (This.Subs.Length));
-
-   function Get_Super (This : Instance)
-      return Handle is (This.Super);
-
-   procedure Set_Super (This : in out Instance; Value : Handle) is
-   begin
-      if This.Super /= null then
-         This.Super.Subs.Delete (This.Index);
-      end if;
-
-      Value.Subs.Append (This'Unchecked_Access);
-      This.Bus := Value.Bus;
-      This.Super := Value;
-   end Set_Super;
-
-   procedure Set_Subs_Rules (This : in out Instance;
-                             Mode : Subs_Mode; Order : Subs_Order) is
-   begin
-      This.Mode := Mode;
-      This.Order := Order;
-   end Set_Subs_Rules;
-
-   procedure Emit (This : Instance; Signal : Slot;
+   procedure Emit (This : Instance; Signal : Signal_Slot;
                    Argument : Value := Empty_Value) is
    begin
       This.Bus.Emit (This.Id, Signal, Argument);
    end Emit;
 
-   procedure Show (This : Instance; Data : Slot; Argument : Data_Value) is
+   procedure Emit (This : Instance; Packet : Packet_Slot;
+                   Argument : Data := Empty_Data) is
    begin
-      This.Bus.Show (This.Id, Data, Argument);
-   end Show;
-
-   procedure Insert (This : in out Instance; Sub : Handle;
-                     Index : Integer := -1) is
-   begin
-      Sub.Set_Super (This'Unchecked_Access);
-      Sub.Set_Index (Index);
-   end Insert;
+      This.Bus.Emit (This.Id, Packet, Argument);
+   end Emit;
 
    procedure Process_Entry (This : Instance; Buf : in out Buffer.Instance) is
       use Subs_Vectors;
       C : Cursor;
       Count : constant Natural := Natural (This.Subs.Length);
-      Sub : Handle;
    begin
-      if This.Order = Before then
+      --  simple cases
+      if This.Is_Bypassed then
+         return;
+      end if;
+
+      if This.Is_Muted then
+         Buf.Silence;
+         return;
+      end if;
+
+      if This.Subs.Is_Empty then
+         This.Process (Buf);
+         return;
+      end if;
+
+      --  full case
+      if not This.Is_Subs_Before then
          This.Process (Buf);
       end if;
 
-      if not This.Subs.Is_Empty then
-         if This.Mode = Serial or else Count = 1 then
-            C := This.Subs.First;
+      if not This.Is_Parallel or else Count = 1 then
+         C := This.Subs.First;
 
-            while C /= No_Element loop
-               Sub := Element (C);
-               Sub.Process_Entry (Buf);
+         while C /= No_Element loop
+            Element (C).Process_Entry (Buf);
+            Next (C);
+         end loop;
+
+      else --  process in parallel, then mix
+         declare
+            Sub_Buf : Buffer.Instance := Buf;
+            Mix_Buf : Buffer.Instance (Buf.Frames, Buf.Channels);
+         begin
+            --  proces first outside loop to skip zero fill
+            C := This.Subs.First;
+            Element (C).Process_Entry (Sub_Buf);
+            Mix_Buf := Sub_Buf;
+
+            loop
                Next (C);
+               exit when C = No_Element;
+
+               Sub_Buf := Buf;
+               Element (C).Process_Entry (Sub_Buf);
+               Mix_Buf.Add (Sub_Buf);
             end loop;
 
-         else --  process in parallel, then mix
-            declare
-               Sub_Buf : Buffer.Instance := Buf;
-               Mix_Buf : Buffer.Instance (Buf.Frames, Buf.Channels);
-            begin
-               C := This.Subs.First;
-
-               --  proces first outside loop to skip zero fill
-               Sub := Element (C);
-               Sub.Process_Entry (Sub_Buf);
-               Mix_Buf := Sub_Buf;
-
-               loop
-                  Next (C);
-                  exit when C = No_Element;
-
-                  Sub_Buf := Buf;
-                  Sub := Element (C);
-                  Sub.Process_Entry (Sub_Buf);
-                  Mix_Buf.Add (Sub_Buf);
-               end loop;
-
-               Mix_Buf.Divide (Count);
-               Buf := Mix_Buf;
-            end;
-         end if;
+            Mix_Buf.Divide (Count);
+            Buf := Mix_Buf;
+         end;
       end if;
 
-      if This.Order = After then
+      if This.Is_Subs_Before then
          This.Process (Buf);
       end if;
    end Process_Entry;

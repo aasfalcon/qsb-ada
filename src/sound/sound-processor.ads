@@ -1,6 +1,6 @@
 with Ada.Containers.Vectors;
 
-limited with Sound.Bus;
+with Sound.Bus;
 with Sound.Buffer;
 with Sound.Object;
 with Sound.Events;
@@ -9,39 +9,80 @@ package Sound.Processor is
    use Sound.Events;
 
    subtype Parent is Object.Instance;
-   type Instance is abstract new Parent with private;
+   type Instance is abstract new Parent and
+      Event_Receiver.Instance with private;
    subtype Class is Instance'Class;
    type Handle is access all Class;
 
-   type Subs_Mode is (Serial, Parallel);
-   type Subs_Order is (After, Before);
+   ----------------------------------------------------------------------------
+   --    Processor slot    --  Type    | Value description                   --
+   ----------------------------------------------------------------------------
+
+   type Parameter is
+      (
+         Id,               --  Int     | Processor ID tag (read-only)
+         Index,            --  Int     | In super, set -1 to make last
+         Is_Muted,         --  Bool    | Produce silence
+         Is_Bypassed,      --  Bool    | Don't touch the buffer
+         Is_Parallel,      --  Bool    | Process subs in parallel
+         Is_Subs_Before,   --  Bool    | Process subs before main/this
+         Super_Id          --  Int     | Super-processor ID
+      );
+
+   type Command is
+      (
+         Expose,           --  None    | (Emit all parameters in sequence)
+         Expose_One,       --  Int     | One parameter slot to emit
+         Destroy,          --  None    | (Destroy processor and all subs)
+         Show_Subs         --  None    | (Emit direct subs' IDs in data)
+      );
+
+   type Signal is
+      (
+         Error,            --  Ints    | Error number (1)
+         Connect,          --  None    | (Connected to bus)
+         Disconnect        --  None    | (Disconnected from bus)
+      );
+
+   type Packet is
+      (
+         Subs              --  Ints    | Sub-processor IDs
+      );
+
+   package Parameters is new Slot_Enum (Parameter, Parameter_Slot);
+   package Commands is new Slot_Enum (Command, Command_Slot);
+   package Signals is new Slot_Enum (Signal, Signal_Slot);
+   package Packets is new Slot_Enum (Packet, Packet_Slot);
+
+   overriding
+   function Get_Id (This : Instance) return Receiver_Tag;
+
+   function Get (This : Instance; Parameter : Parameter_Slot) return Value;
+
+   overriding
+   procedure Set (This : in out Instance; Parameter : Parameter_Slot;
+                  Argument : Value);
+
+   overriding
+   procedure Run (This : in out Instance; Command : Command_Slot;
+                  Argument : Value := Empty_Value);
 
    overriding
    procedure Initialize (This : in out Instance);
 
-   function Get_Bus (This : Instance) return Bus.Handle;
-   procedure Set_Bus (This : in out Instance; Value : Bus.Handle);
+   overriding
+   procedure Finalize (This : in out Instance);
 
-   function Get_Id (This : Instance) return Tag;
+   procedure Connect (This : in out Instance; Bus : Sound.Bus.Handle);
+   procedure Disconnect (This : in out Instance);
 
-   function Get_Index (This : Instance) return Positive;
-   procedure Set_Index (This : in out Instance; Value : Natural);
-
-   function Get_Sub (This : Instance; Index : Positive) return Handle;
-   function Get_Sub_Count (This : Instance) return Natural;
-
-   function Get_Super (This : Instance) return Handle;
-   procedure Set_Super (This : in out Instance; Value : Handle);
-
-   procedure Set_Subs_Rules (This : in out Instance;
-                             Mode : Subs_Mode; Order : Subs_Order);
-   procedure Emit (This : Instance; Signal : Slot;
+   procedure Emit (This : Instance; Parameter : Parameter_Slot;
                    Argument : Value := Empty_Value);
-   procedure Show (This : Instance; Data : Slot; Argument : Data_Value);
-   procedure Perform (This : in out Instance; Command : Slot;
-                      Argument : Value) is null;
-   procedure Insert (This : in out Instance; Sub : Handle;
-                     Index : Integer := -1);
+   procedure Emit (This : Instance; Signal : Signal_Slot;
+                   Argument : Value := Empty_Value);
+   procedure Emit (This : Instance; Packet : Packet_Slot;
+                   Argument : Data := Empty_Data);
+
    procedure Process (This : Instance; Buf : in out Buffer.Instance) is null;
    procedure Process_Entry (This : Instance; Buf : in out Buffer.Instance);
 
@@ -49,15 +90,20 @@ private
 
    package Subs_Vectors is new Ada.Containers.Vectors (Positive, Handle);
 
-   type Instance is abstract new Parent with
+   type Instance is abstract new Parent and
+      Event_Receiver.Instance with
       record
-         Bus : access Bus.Instance;
-         Id : Tag;
-         Index : Positive;
-         Super : Handle;
+         Bus : Sound.Bus.Handle := null;
+         Id : Receiver_Tag := 0;
+         Super : Handle := null;
          Subs : Subs_Vectors.Vector;
-         Mode : Subs_Mode;
-         Order : Subs_Order;
+
+         --  parameters
+         Index : Natural := 0;
+         Is_Muted : Boolean := False;
+         Is_Bypassed : Boolean := False;
+         Is_Parallel : Boolean := False;
+         Is_Subs_Before : Boolean := True;
       end record;
 
 end Sound.Processor;

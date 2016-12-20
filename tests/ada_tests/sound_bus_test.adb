@@ -1,21 +1,19 @@
 with AUnit.Assertions; use AUnit.Assertions;
 
-with Sound_Bus_Test_Fixture; use Sound_Bus_Test_Fixture;
-
 with Sound.Events;
 with Sound.Constants;
 
-use Sound, Sound.Events;
-
 package body Sound_Bus_Test is
 
-   procedure Has_Runner_Test (This : in out Fixture) is
+   use Sound, Sound.Events, Fixture.Sound_Bus_Test;
+
+   procedure Has_Runner_Test (This : in out Instance) is
    begin
       Assert (This.Bus.Has_Runner (This.Processor.Get_Id),
               "Don't have default runner");
    end Has_Runner_Test;
 
-   procedure Get_Data_Underruns_Test (This : in out Fixture) is
+   procedure Get_Data_Underruns_Test (This : in out Instance) is
       Actual_Underruns : Natural;
       Planned_Underruns : constant := 14;
       Bus_Size : constant := Constants.Data_Bus_Size - 1;
@@ -32,7 +30,7 @@ package body Sound_Bus_Test is
               Natural'Image (Actual_Underruns));
    end Get_Data_Underruns_Test;
 
-   procedure Get_Signal_Underruns_Test (This : in out Fixture) is
+   procedure Get_Signal_Underruns_Test (This : in out Instance) is
       Actual_Underruns : Natural;
       Planned_Underruns : constant := 11;
       Bus_Size : constant := Constants.Signals_Bus_Size - 1;
@@ -48,7 +46,7 @@ package body Sound_Bus_Test is
               Natural'Image (Actual_Underruns));
    end Get_Signal_Underruns_Test;
 
-   procedure Add_Runner_Test (This : in out Fixture) is
+   procedure Add_Runner_Test (This : in out Instance) is
    begin
       This.Bus.Initialize; --  remove default
       This.Bus.Add_Runner (This.Processor'Unchecked_Access);
@@ -56,7 +54,7 @@ package body Sound_Bus_Test is
               "Don't have runner after add");
    end Add_Runner_Test;
 
-   procedure Emit_Test (This : in out Fixture) is
+   procedure Emit_Test (This : in out Instance) is
       Count : constant := 10;
       Received : Integer;
       E : Event;
@@ -81,7 +79,7 @@ package body Sound_Bus_Test is
       end loop;
    end Emit_Test;
 
-   procedure Show_Test (This : in out Fixture) is
+   procedure Show_Test (This : in out Instance) is
       Count : constant := 10;
       Received : Integer;
       D : Data_Event;
@@ -107,7 +105,7 @@ package body Sound_Bus_Test is
       end loop;
    end Show_Test;
 
-   procedure Remove_Runner_Test (This : in out Fixture) is
+   procedure Remove_Runner_Test (This : in out Instance) is
    begin
       This.Has_Runner_Test;
       This.Bus.Remove_Runner (This.Processor.Get_Id);
@@ -115,7 +113,7 @@ package body Sound_Bus_Test is
               "Still has runner after remove");
    end Remove_Runner_Test;
 
-   procedure Send_Test (This : in out Fixture) is
+   procedure Send_Test (This : in out Instance) is
       Count : constant := 10;
       Received : Integer;
       E : Event;
@@ -140,7 +138,7 @@ package body Sound_Bus_Test is
       end loop;
    end Send_Test;
 
-   procedure Set_Watcher_Test (This : in out Fixture) is
+   procedure Set_Watcher_Test (This : in out Instance) is
       E : constant Event := This.Random.Make_Event (This.Processor.Get_Id);
    begin
       This.Bus.Initialize; --  remove default
@@ -155,7 +153,7 @@ package body Sound_Bus_Test is
               "Unable to set watcher");
    end Set_Watcher_Test;
 
-   procedure Set_Analyzer_Test (This : in out Fixture) is
+   procedure Set_Analyzer_Test (This : in out Instance) is
       E : constant Data_Event :=
          This.Random.Make_Data_Event (This.Processor.Get_Id);
    begin
@@ -169,7 +167,7 @@ package body Sound_Bus_Test is
       Assert (This.Received_Data.First_Element = E, "Unable to set analyzer");
    end Set_Analyzer_Test;
 
-   procedure Dispatch_Test (This : in out Fixture) is
+   procedure Dispatch_Test (This : in out Instance) is
       use Event_Vectors;
       Sent, Received : Natural;
       SC, RC : Cursor;
@@ -194,7 +192,7 @@ package body Sound_Bus_Test is
       end loop;
    end Dispatch_Test;
 
-   procedure Watch_Test (This : in out Fixture) is
+   procedure Watch_Test (This : in out Instance) is
       use Event_Vectors;
       Sent, Received : Natural;
       SC, RC : Cursor;
@@ -219,7 +217,7 @@ package body Sound_Bus_Test is
       end loop;
    end Watch_Test;
 
-   procedure Stress_Emit_Test (This : in out Fixture) is
+   procedure Stress_Emit_Test (This : in out Instance) is
       Underruns_Planned : constant := 22;
       Underruns : Natural := 0;
    begin
@@ -246,7 +244,7 @@ package body Sound_Bus_Test is
       end loop;
    end Stress_Emit_Test;
 
-   procedure Stress_Show_Test (This : in out Fixture) is
+   procedure Stress_Show_Test (This : in out Instance) is
       Underruns_Planned : constant := 22;
       Underruns : Natural := 0;
    begin
@@ -273,7 +271,7 @@ package body Sound_Bus_Test is
       end loop;
    end Stress_Show_Test;
 
-   procedure Stress_Send_Test (This : in out Fixture) is
+   procedure Stress_Send_Test (This : in out Instance) is
       Stress_Dispatches_Planned : constant := 3;
       Send_Count : constant := Stress_Dispatches_Planned *
                                (Constants.Commands_Bus_Size - 1) + 1;

@@ -6,7 +6,7 @@ package body Sound_Buffer_Test is
 
    use Common.Wave;
 
-   procedure Set_Up (This : in out Fixture) is
+   procedure Set_Up (This : in out Instance) is
    begin
       This.Buffer_1.Silence;
       This.Buffer_2.Silence;
@@ -14,7 +14,7 @@ package body Sound_Buffer_Test is
       This.Buffer_4.Silence;
    end Set_Up;
 
-   procedure With_Channels_Test (This : in out Fixture) is
+   procedure With_Channels_Test (This : in out Instance) is
       Sample : Buffer.Sample;
    begin
       --  stereo to mono
@@ -124,7 +124,7 @@ package body Sound_Buffer_Test is
 
    end With_Channels_Test;
 
-   procedure Add_Test (This : in out Fixture) is
+   procedure Add_Test (This : in out Instance) is
       Sample : Sound.Buffer.Sample;
    begin
       Fill (This.Buffer_2, Sine'Access);
@@ -143,7 +143,7 @@ package body Sound_Buffer_Test is
       end loop;
    end Add_Test;
 
-   procedure Divide_Test (This : in out Fixture) is
+   procedure Divide_Test (This : in out Instance) is
       Sample : Sound.Buffer.Sample;
    begin
       --  simple
@@ -179,7 +179,7 @@ package body Sound_Buffer_Test is
 
    end Divide_Test;
 
-   procedure Level_Test (This : in out Fixture) is
+   procedure Level_Test (This : in out Instance) is
       Level_Ratio : constant := 0.3367;
       Sample : Buffer.Sample;
    begin
@@ -197,7 +197,7 @@ package body Sound_Buffer_Test is
       end loop;
    end Level_Test;
 
-   procedure Silence_Test (This : in out Fixture) is
+   procedure Silence_Test (This : in out Instance) is
    begin
       Fill (This.Buffer_1, Sine'Access);
       Fill (This.Buffer_2, Square'Access);

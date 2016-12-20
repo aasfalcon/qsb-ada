@@ -3,16 +3,16 @@ with AUnit.Assertions; use AUnit.Assertions;
 
 package body Sound_Ring_Facet_Test is
 
-   function Random_Size (This : in out Fixture) return Positive;
-   procedure Size_Test_Pefrorm (This : in out Fixture; Size : Positive);
+   function Random_Size (This : in out Instance) return Positive;
+   procedure Size_Test_Pefrorm (This : in out Instance; Size : Positive);
 
-   procedure Set_Up (This : in out Fixture) is
+   procedure Set_Up (This : in out Instance) is
    begin
       This.Ring := new Test_Ring.Instance (This.Size + 1);
       This.Ring.Initialize;
    end Set_Up;
 
-   procedure Tear_Down (This : in out Fixture) is
+   procedure Tear_Down (This : in out Instance) is
       procedure Delete_Ring is
          new Ada.Unchecked_Deallocation (Test_Ring.Class, Test_Ring.Handle);
    begin
@@ -20,7 +20,7 @@ package body Sound_Ring_Facet_Test is
       This.Ring := null;
    end Tear_Down;
 
-   procedure Create_Test (This : in out Fixture) is
+   procedure Create_Test (This : in out Instance) is
    begin
       Assert (This.Ring.Get_Count = This.Size, "Wrong size of ring");
       Assert (This.Ring.Get_Loaded = 0, "Wrong loaded count");
@@ -30,12 +30,12 @@ package body Sound_Ring_Facet_Test is
       Assert (not This.Ring.Is_Half_Full, "Is half full on create");
    end Create_Test;
 
-   procedure Get_Count_Test (This : in out Fixture) is
+   procedure Get_Count_Test (This : in out Instance) is
    begin
       Assert (This.Ring.Get_Count = This.Size, "Wrong ring count");
    end Get_Count_Test;
 
-   procedure Get_Loaded_Test (This : in out Fixture) is
+   procedure Get_Loaded_Test (This : in out Instance) is
    begin
       for I in 1 .. This.Size loop
          This.Ring.Push (This.Item);
@@ -48,7 +48,7 @@ package body Sound_Ring_Facet_Test is
       end loop;
    end Get_Loaded_Test;
 
-   procedure Get_Space_Test (This : in out Fixture) is
+   procedure Get_Space_Test (This : in out Instance) is
    begin
       for I in 1 .. This.Size loop
          This.Ring.Push (This.Item);
@@ -62,7 +62,7 @@ package body Sound_Ring_Facet_Test is
       end loop;
    end Get_Space_Test;
 
-   procedure Is_Empty_Test (This : in out Fixture) is
+   procedure Is_Empty_Test (This : in out Instance) is
    begin
       Assert (This.Ring.Is_Empty, "Not empty when created");
 
@@ -78,7 +78,7 @@ package body Sound_Ring_Facet_Test is
       end loop;
    end Is_Empty_Test;
 
-   procedure Is_Full_Test (This : in out Fixture) is
+   procedure Is_Full_Test (This : in out Instance) is
    begin
       Assert (This.Ring.Is_Empty, "Is full when created");
 
@@ -94,7 +94,7 @@ package body Sound_Ring_Facet_Test is
       end loop;
    end Is_Full_Test;
 
-   procedure Is_Half_Full_Test (This : in out Fixture) is
+   procedure Is_Half_Full_Test (This : in out Instance) is
       Test_Half : constant Positive :=
          (if This.Size / 2 = 0 then 1 else This.Size / 2);
    begin
@@ -113,7 +113,7 @@ package body Sound_Ring_Facet_Test is
       end loop;
    end Is_Half_Full_Test;
 
-   procedure Clear_Test (This : in out Fixture) is
+   procedure Clear_Test (This : in out Instance) is
    begin
       for I in 1 .. This.Random_Size loop
          This.Ring.Push (This.Item);
@@ -124,7 +124,7 @@ package body Sound_Ring_Facet_Test is
       This.Create_Test;
    end Clear_Test;
 
-   procedure Drop_Test (This : in out Fixture) is
+   procedure Drop_Test (This : in out Instance) is
       Count : constant Positive := This.Random_Size;
    begin
       for I in 1 .. Count loop
@@ -136,7 +136,7 @@ package body Sound_Ring_Facet_Test is
       Assert (This.Ring.Get_Loaded = Count - 1, "Wrong count after drop");
    end Drop_Test;
 
-   procedure Pop_Test (This : in out Fixture) is
+   procedure Pop_Test (This : in out Instance) is
    begin
       for I in 1 .. This.Size loop
          This.Item := Test_Item (I);
@@ -149,7 +149,7 @@ package body Sound_Ring_Facet_Test is
       end loop;
    end Pop_Test;
 
-   procedure Push_Test (This : in out Fixture) is
+   procedure Push_Test (This : in out Instance) is
       Push_Value : constant Test_Item := 11122233;
       Clear_Value : constant Test_Item := 0;
    begin
@@ -160,7 +160,7 @@ package body Sound_Ring_Facet_Test is
       Assert (This.Item = Push_Value, "Values don't match");
    end Push_Test;
 
-   procedure Crash_Test (This : in out Fixture) is
+   procedure Crash_Test (This : in out Instance) is
    begin
       --  underflow error
       begin
@@ -183,7 +183,7 @@ package body Sound_Ring_Facet_Test is
       end;
    end Crash_Test;
 
-   procedure Size_Test (This : in out Fixture) is
+   procedure Size_Test (This : in out Instance) is
       Max_Random_Size : constant Positive := 1_000;
       Size_Save : constant Positive := This.Size;
    begin
@@ -201,7 +201,7 @@ package body Sound_Ring_Facet_Test is
 
    --  Hidden private methods
 
-   function Random_Size (This : in out Fixture) return Positive is
+   function Random_Size (This : in out Instance) return Positive is
       Min : constant Positive := 1;
       Max : constant Positive := This.Size;
 
@@ -214,7 +214,7 @@ package body Sound_Ring_Facet_Test is
       return R.Random (Generator);
    end Random_Size;
 
-   procedure Size_Test_Pefrorm (This : in out Fixture; Size : Positive) is
+   procedure Size_Test_Pefrorm (This : in out Instance; Size : Positive) is
    begin
       This.Tear_Down;
       This.Size := Size;

@@ -1,6 +1,6 @@
 with Sound.Constants;
 
-package body Sound_Bus_Test_Fixture is
+package body Fixture.Sound_Bus_Test is
 
    -----------------------
    -- Fixture_Processor --
@@ -94,4 +94,4 @@ package body Sound_Bus_Test_Fixture is
       This.Received_Data.Append (E);
    end Analyze_Data;
 
-end Sound_Bus_Test_Fixture;
+end Fixture.Sound_Bus_Test;

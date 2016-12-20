@@ -1,0 +1,55 @@
+package body Sound.Leveler is
+-- 
+--    overriding
+--    procedure Initialize (This : in out Instance) is
+--    begin
+--       Parent (This).Initialize;
+--       This.Divisor := 1.0;
+--       This.Is_Muted := False;
+--    end Initialize;
+-- 
+--    overriding
+--    procedure Perform (This : in out Instance; Slot : Parameter;
+--                       Argument : Value) is
+--    begin
+--       case Sound.Leveler.Parameer (Slot) is
+--          when Mute =>
+--             This.Is_Muted := True;
+--             This.Emit ()
+-- 
+--          when Reset =>
+--             This.Divisor := 1.0;
+--             This.Is_Muted := False;
+-- 
+--          when Reset_Level =>
+--             This.Divisor := 1.0;
+-- 
+--          when Unmute =>
+--             This.Is_Muted := False;
+--       end case;
+--    end Perform;
+-- 
+--    overriding
+--    procedure Process (This : Instance; Buf : in out Buffer.Instance) is
+--    begin
+--       if This.Divisor /= 1.0 then
+--          for F in 1 .. Buf.Frames loop
+--             for C in 1 .. Buf.Channels loop
+--                Buf.Samples (F, C) := Buf.Samples (F, C) /
+--                                      Buffer.Sample (This.Divisor);
+--             end loop;
+--          end loop;
+--       end if;
+--    end Process;
+-- 
+--    overriding
+--    procedure Process_Entry (This : Instance; Buf : in out Buffer.Instance) is
+--    begin
+--       if This.Is_Muted then
+--          Buf.Silence;
+--       else
+--          Parent (This).Process_Entry (Buf);
+--       end if;
+--    end Process_Entry;
+
+end Sound.Leveler;

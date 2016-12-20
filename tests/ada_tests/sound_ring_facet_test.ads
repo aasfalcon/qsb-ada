@@ -1,5 +1,4 @@
-with AUnit.Test_Fixtures; use AUnit.Test_Fixtures;
-with AUnit.Test_Suites; use AUnit.Test_Suites;
+with AUnit.Test_Fixtures;
 
 with Test_Facet;
 
@@ -12,32 +11,32 @@ package Sound_Ring_Facet_Test is
 
    Ring_Size_Default : constant Positive := 33;
 
-   type Fixture is new Test_Fixture with record
+   type Instance is new AUnit.Test_Fixtures.Test_Fixture with record
       Ring : Test_Ring.Handle := null;
       Size : Positive := Ring_Size_Default;
       Item : Test_Item := 0;
    end record;
 
-   procedure Set_Up (This : in out Fixture);
-   procedure Tear_Down (This : in out Fixture);
+   procedure Set_Up (This : in out Instance);
+   procedure Tear_Down (This : in out Instance);
 
-   procedure Create_Test (This : in out Fixture);
-   procedure Get_Count_Test (This : in out Fixture);
-   procedure Get_Loaded_Test (This : in out Fixture);
-   procedure Get_Space_Test (This : in out Fixture);
-   procedure Is_Empty_Test (This : in out Fixture);
-   procedure Is_Full_Test (This : in out Fixture);
-   procedure Is_Half_Full_Test (This : in out Fixture);
+   procedure Create_Test (This : in out Instance);
+   procedure Get_Count_Test (This : in out Instance);
+   procedure Get_Loaded_Test (This : in out Instance);
+   procedure Get_Space_Test (This : in out Instance);
+   procedure Is_Empty_Test (This : in out Instance);
+   procedure Is_Full_Test (This : in out Instance);
+   procedure Is_Half_Full_Test (This : in out Instance);
 
-   procedure Clear_Test (This : in out Fixture);
-   procedure Drop_Test (This : in out Fixture);
-   procedure Pop_Test (This : in out Fixture);
-   procedure Push_Test (This : in out Fixture);
+   procedure Clear_Test (This : in out Instance);
+   procedure Drop_Test (This : in out Instance);
+   procedure Pop_Test (This : in out Instance);
+   procedure Push_Test (This : in out Instance);
 
-   procedure Crash_Test (This : in out Fixture);
-   procedure Size_Test (This : in out Fixture);
+   procedure Crash_Test (This : in out Instance);
+   procedure Size_Test (This : in out Instance);
 
-   package Test is new Test_Facet (Fixture, "Sound.Ring_Facet");
+   package Test is new Test_Facet (Instance, "Sound.Ring_Facet");
    Cases : Test.Cases :=
       (
          Test.Create ("Create_Test", Create_Test'Access),
@@ -56,6 +55,6 @@ package Sound_Ring_Facet_Test is
          Test.Create ("Crash_Test", Crash_Test'Access),
          Test.Create ("Size_Test", Size_Test'Access)
       );
-   Suite : Access_Test_Suite := Test.Suite (Cases);
+   Suite : Test.Handle := Test.Suite (Cases);
 
 end Sound_Ring_Facet_Test;

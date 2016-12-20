@@ -8,6 +8,7 @@ generic
 
 package Test_Facet is
 
+   subtype Handle is Access_Test_Suite;
    package Caller is new AUnit.Test_Caller (Fixture);
    type Cases is array (Positive range <>) of Caller.Test_Case_Access;
 

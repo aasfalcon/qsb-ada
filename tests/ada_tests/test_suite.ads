@@ -1,7 +1,8 @@
-with AUnit.Test_Suites; use AUnit.Test_Suites;
+with AUnit.Test_Suites;
 
 package Test_Suite is
 
-   function Suite return Access_Test_Suite;
+   subtype Handle is AUnit.Test_Suites.Access_Test_Suite;
+   function Suite return Handle;
 
 end Test_Suite;

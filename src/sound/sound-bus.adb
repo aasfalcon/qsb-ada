@@ -1,143 +1,191 @@
 package body Sound.Bus is
 
-   use Bus_Object_Maps;
+   function Error_Count (This : Instance; E : Error)
+      return Natural is (This.Errors (E));
 
-   procedure Initialize (This : in out Instance) is
+   function Has_Errors (This : Instance) return Boolean is
    begin
-      Parent (This).Initialize;
-      This.Objects.Clear;
-      This.Commands.Initialize;
-      This.Signals.Initialize;
-      This.Data.Initialize;
-
-      This.Signal_Underruns := 0;
-      This.Data_Underruns := 0;
-   end Initialize;
-
-   function Has_Runner (This : Instance; Processor_Id : Tag)
-      return Boolean is  (This.Objects.Find (Processor_Id) /= No_Element);
-
-   function Get_Data_Underruns (This : Instance)
-      return Natural is  (This.Data_Underruns);
-
-   function Get_Signal_Underruns (This : Instance)
-      return Natural is  (This.Signal_Underruns);
-
-   procedure Analyze (This : in out Instance) is
-      C : Cursor;
-      E : Data_Event;
-      Analyzer : Data_Analyzer.Handle;
-      use Data_Analyzer;
-   begin
-      while not This.Data.Is_Empty loop
-         This.Data.Pop (E);
-         C := This.Objects.Find (E.Tag);
-
-         if C /= No_Element then
-            Analyzer := This.Objects.Constant_Reference (C).Analyzer;
-
-            if Analyzer /= null then
-               Analyzer.Analyze_Data (E);
-            end if;
+      for E in Error loop
+         if This.Errors (E) > 0 then
+            return True;
          end if;
       end loop;
-   end Analyze;
 
-   procedure Watch (This : in out Instance) is
-      C : Cursor;
-      E : Event;
-      Watcher : Event_Watcher.Handle;
-      use Event_Watcher;
+      return False;
+   end Has_Errors;
+
+   function Get_Receiver (This : Instance; Id : Receiver_Tag)
+      return Event_Receiver.Handle is
+      use Receiver_Maps;
    begin
-      while not This.Signals.Is_Empty loop
-         This.Signals.Pop (E);
-         C := This.Objects.Find (E.Tag);
+      if This.Receivers.Find (Id) = No_Element then
+         return null;
+      end if;
 
-         if C /= No_Element then
-            Watcher := This.Objects.Constant_Reference (C).Watcher;
+      return This.Receivers.Element (Id);
+   end Get_Receiver;
 
-            if Watcher /= null then
-               Watcher.Watch_Event (E);
-            end if;
-         end if;
-      end loop;
-   end Watch;
-
-   procedure Add_Runner (This : in out Instance; Runner : Processor.Handle) is
+   procedure Connect (This : in out Instance;
+                      Receiver : Event_Receiver.Handle) is
    begin
-      This.Objects.Insert (Runner.Get_Id, (Runner, null, null));
-   end Add_Runner;
+      This.Receivers.Insert (Receiver.Get_Id, Receiver);
+   end Connect;
 
-   procedure Dispatch (This : in out Instance) is
-      C : Cursor;
-      E : Event;
+   procedure Connect (This : in out Instance;
+                      Supervisor : Event_Supervisor.Handle) is
    begin
-      while not This.Commands.Is_Empty loop
-         This.Commands.Pop (E);
-         C := This.Objects.Find (E.Tag);
+      This.Supervisors.Append (Supervisor);
+   end Connect;
 
-         if C /= No_Element then
-            Element (C).Runner.Perform (E.Slot, E.Argument);
-         end if;
-      end loop;
-   end Dispatch;
-
-   procedure Emit (This : in out Instance; Processor_Id : Tag; Signal : Slot;
-                   Argument : Value := Empty_Value) is
-      E : constant Event :=  (Processor_Id, Signal, Argument);
+   procedure Disconnect (This : in out Instance;
+                         Receiver : Event_Receiver.Handle) is
    begin
-      This.Signals.Push (E);
+      This.Receivers.Delete (Receiver.Get_Id);
+   end Disconnect;
 
+   procedure Disconnect (This : in out Instance;
+                         Supervisor : Event_Supervisor.Handle) is
+      use Supervisor_Vectors;
+      C : Cursor := This.Supervisors.Find (Supervisor);
+   begin
+      This.Supervisors.Delete (C);
+   end Disconnect;
+
+   procedure Emit (This : in out Instance; Id : Receiver_Tag;
+                   Parameter : Parameter_Slot; Argument : Value) is
+      E : constant Event := (Id, Receiver_Slot (Parameter), Argument);
+   begin
+      This.Output.Push (E);
    exception
       when Event_Ring.Overflow_Error =>
-         This.Signal_Underruns := This.Signal_Underruns + 1;
+         This.Errors (Output_Underrun) := This.Errors (Output_Underrun) + 1;
+         This.Output.Drop;
+         This.Output.Push (E);
+   end Emit;
+
+   procedure Emit (This : in out Instance; Id : Receiver_Tag;
+                   Signal : Signal_Slot; Argument : Value) is
+      E : constant Event := (Id, Receiver_Slot (Signal), Argument);
+   begin
+      This.Signals.Push (E);
+   exception
+      when Event_Ring.Overflow_Error =>
+         This.Errors (Signal_Underrun) := This.Errors (Signal_Underrun) + 1;
          This.Signals.Drop;
          This.Signals.Push (E);
    end Emit;
 
-   procedure Show (This : in out Instance; Processor_Id : Tag; Data : Slot;
-                   Argument : Data_Value) is
-      E : constant Data_Event :=  (Processor_Id, Data, Argument);
+   procedure Emit (This : in out Instance; Id : Receiver_Tag;
+                   Packet : Packet_Slot; Argument : Data) is
+      P : constant Events.Packet := (Id, Receiver_Slot (Packet), Argument);
    begin
-      This.Data.Push (E);
-
+      This.Packets.Push (P);
    exception
-      when Data_Ring.Overflow_Error =>
-         This.Data_Underruns := This.Data_Underruns + 1;
-         This.Data.Drop;
-         This.Data.Push (E);
-   end Show;
+      when Packet_Ring.Overflow_Error =>
+         This.Errors (Packet_Underrun) := This.Errors (Packet_Underrun) + 1;
+         This.Packets.Drop;
+         This.Packets.Push (P);
+   end Emit;
 
-   procedure Send (This : in out Instance; Processor_Id : Tag; Command : Slot;
-                   Argument : Value := Empty_Value) is
-      E : constant Event :=  (Processor_Id, Command, Argument);
+   procedure Send (This : in out Instance; Id : Receiver_Tag;
+                   Parameter : Parameter_Slot; Argument : Value) is
+      E : constant Event := (Id, Receiver_Slot (Parameter), Argument);
    begin
-      This.Commands.Push (E);
-
+      This.Input.Push (E);
    exception
       when Event_Ring.Overflow_Error =>
-         --  stress offload and retry
-         This.Dispatch;
+         This.Offload (Input_Offload);
+         This.Input.Push (E);
+   end Send;
+
+   procedure Send (This : in out Instance; Id : Receiver_Tag;
+                   Command : Command_Slot; Argument : Value) is
+      E : constant Event := (Id, Receiver_Slot (Command), Argument);
+   begin
+      This.Commands.Push (E);
+   exception
+      when Event_Ring.Overflow_Error =>
+         This.Offload (Commands_Offload);
          This.Commands.Push (E);
    end Send;
 
-   procedure Remove_Runner (This : in out Instance; Processor_Id : Tag) is
+   procedure Dispatch (This : in out Instance) is
+      use Receiver_Maps;
+      E : Event;
    begin
-      This.Objects.Delete (Processor_Id);
-   end Remove_Runner;
+      while not This.Input.Is_Empty loop
+         begin
+            This.Input.Pop (E);
+            Element (This.Receivers.Find (E.Id)).
+               Set (Parameter_Slot (E.Slot), E.Argument);
+         exception
+            when Constraint_Error =>
+               This.Errors (Unknown_Receiver) :=
+                  This.Errors (Unknown_Receiver) + 1;
+         end;
+      end loop;
 
-   procedure Set_Watcher (This : in out Instance; Processor_Id : Tag;
-                          Watcher : Event_Watcher.Handle) is
-      C : constant Cursor := This.Objects.Find (Processor_Id);
-   begin
-      This.Objects.Reference (C).Watcher := Watcher;
-   end Set_Watcher;
+      while not This.Commands.Is_Empty loop
+         begin
+            This.Commands.Pop (E);
+            Element (This.Receivers.Find (E.Id)).
+               Run (Command_Slot (E.Slot), E.Argument);
+         exception
+            when Constraint_Error =>
+               This.Errors (Unknown_Receiver) :=
+                  This.Errors (Unknown_Receiver) + 1;
+         end;
+      end loop;
+   end Dispatch;
 
-   procedure Set_Analyzer (This : in out Instance; Processor_Id : Tag;
-                           Analyzer : Data_Analyzer.Handle) is
-      C : constant Cursor := This.Objects.Find (Processor_Id);
+   procedure Watch (This : in out Instance) is
+      use Supervisor_Vectors;
+      procedure Propagate_Event (E : Event);
+      procedure Propagate_Packet (P : Events.Packet);
+
+      procedure Propagate_Event (E : Event) is
+         C : Cursor := This.Supervisors.First;
+      begin
+         while C /= No_Element loop
+            Element (C).Watch_Event (E);
+            Next (C);
+         end loop;
+      end Propagate_Event;
+
+      procedure Propagate_Packet (P : Events.Packet) is
+         C : Cursor := This.Supervisors.First;
+      begin
+         while C /= No_Element loop
+            Element (C).Analyze_Packet (P);
+            Next (C);
+         end loop;
+      end Propagate_Packet;
+
+      E : Event;
+      P : Packet;
    begin
-      This.Objects.Reference (C).Analyzer := Analyzer;
-   end Set_Analyzer;
+      if not This.Supervisors.Is_Empty then
+         while not This.Output.Is_Empty loop
+            This.Output.Pop (E);
+            Propagate_Event (E);
+         end loop;
+
+         while not This.Signals.Is_Empty loop
+            This.Signals.Pop (E);
+            Propagate_Event (E);
+         end loop;
+
+         while not This.Packets.Is_Empty loop
+            This.Packets.Pop (P);
+            Propagate_Packet (P);
+         end loop;
+      end if;
+   end Watch;
+
+   procedure Offload (This : in out Instance; What : Offload_Error) is
+   begin
+      This.Errors (What) := This.Errors (What) + 1;
+      This.Dispatch;
+   end;
 
 end Sound.Bus;
