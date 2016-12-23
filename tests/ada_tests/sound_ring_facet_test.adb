@@ -125,15 +125,24 @@ package body Sound_Ring_Facet_Test is
    end Clear_Test;
 
    procedure Drop_Test (This : in out Instance) is
-      Count : constant Positive := This.Random_Size;
+      Count : Positive := This.Random_Size;
+      Item : Test_Item;
    begin
+      if Count < 2 then
+         Count := 2;
+      end if;
+
       for I in 1 .. Count loop
-         This.Ring.Push (This.Item);
+         This.Ring.Push (Test_Item (I));
       end loop;
 
       This.Ring.Drop;
 
       Assert (This.Ring.Get_Loaded = Count - 1, "Wrong count after drop");
+      This.Ring.Pop (Item);
+      Assert (Item = Test_Item (2),
+              "Wrong popped item after drop, expected: 2, got:" &
+              Test_Item'Image (Item));
    end Drop_Test;
 
    procedure Pop_Test (This : in out Instance) is

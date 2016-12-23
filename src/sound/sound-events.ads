@@ -2,32 +2,33 @@
 
 package Sound.Events is
 
-   type Receiver_Tag is new Natural;
-   Empty_Id : constant Receiver_Tag := 0;
+   type Client_Id is new Natural;
+   Empty_Id : constant Client_Id := 0;
 
    -----------
    -- Slots --
    -----------
 
-   type Receiver_Slot is new Natural;
+   type Client_Slot is new Natural;
 
-   type Parameter_Slot is new Receiver_Slot;
-   type Command_Slot is new Receiver_Slot;
-   type Signal_Slot is new Receiver_Slot;
-   type Packet_Slot is new Receiver_Slot;
+   type Parameter_Slot is new Client_Slot;
+   type Command_Slot is new Client_Slot;
+   type Signal_Slot is new Client_Slot;
+   type Packet_Slot is new Client_Slot;
 
    generic
-      type Enum is (<>);
-      type Slot is new Natural;
-      Offset : Natural := 0;
+      type Enum_Value is (<>);
+      type Slot_Value is new Client_Slot;
+      Offset : Slot_Value := 0;
    package Slot_Enum is
-      Tail : constant Slot := Slot (Offset + Enum'Pos (Enum'Last) + 1);
+      Tail : constant Slot_Value :=
+         Slot_Value (Offset + Enum_Value'Pos (Enum_Value'Last) + 1);
 
-      function To_Slot (Value : Enum)
-         return Slot is (Slot (Offset + Enum'Pos (Value)));
+      function Slot (Value : Enum_Value)
+         return Slot_Value is (Slot_Value (Offset + Enum_Value'Pos (Value)));
 
-      function To_Enum (Value : Slot)
-         return Enum is (Enum'Val (Value));
+      function Enum (Value : Slot_Value)
+         return Enum_Value is (Enum_Value'Val (Value));
    end Slot_Enum;
 
    -----------
@@ -54,20 +55,21 @@ package Sound.Events is
    -- Packet --
    ------------
 
-   type Packet_Count is range 1 .. Constants.Packet_Max_Count;
-   type Packet_Bools is array (Packet_Count range <>) of Boolean;
-   type Packet_Reals is array (Packet_Count range <>) of Float;
-   type Packet_Ints is array (Packet_Count range <>) of Integer;
+   subtype Data_Count is Natural range 1 .. Constants.Packet_Max_Count;
+   subtype Data_Type is Value_Type;
+   type Data_Bools is array (Data_Count range <>) of Boolean;
+   type Data_Reals is array (Data_Count range <>) of Float;
+   type Data_Ints is array (Data_Count range <>) of Integer;
 
-   type Data (The_Type : Value_Type := None; Count : Packet_Count := 1) is
+   type Data (The_Type : Data_Type := None; Count : Data_Count := 1) is
       record
          case The_Type is
             when Bool =>
-               Bools : Packet_Bools (1 .. Count);
+               Bools : Data_Bools (1 .. Count);
             when Real =>
-               Reals : Packet_Reals (1 .. Count);
+               Reals : Data_Reals (1 .. Count);
             when Int =>
-               Ints : Packet_Ints (1 .. Count);
+               Ints : Data_Ints (1 .. Count);
             when None =>
                null;
          end case;
@@ -79,19 +81,19 @@ package Sound.Events is
    -- Event --
    -----------
 
-   type Event_Base is tagged
+   type Basic_Event is abstract tagged
       record
-         Id : Receiver_Tag;
-         Slot : Receiver_Slot;
+         Id : Client_Id;
+         Slot : Client_Slot;
       end record;
 
-   type Event is new Event_Base with
+   type Event is new Basic_Event with
       record
          Argument : Value;
       end record;
 
-   type Packet is
-      new Event_Base with
+   type Packet_Event is
+      new Basic_Event with
       record
          Argument : Data;
       end record;
@@ -100,24 +102,25 @@ package Sound.Events is
    -- Receivers --
    ---------------
 
-   package Event_Receiver is
+   package Event_Client is
       type Instance is limited interface;
       subtype Class is Instance'Class;
       type Handle is access all Class;
-      function Get_Id (This : Instance) return Receiver_Tag is abstract;
+      function Get_Id (This : Instance) return Client_Id is abstract;
       procedure Set (This : in out Instance; Parameter : Parameter_Slot;
                      Argument : Value) is abstract;
       procedure Run (This : in out Instance; Command : Command_Slot;
                      Argument : Value := Empty_Value) is abstract;
-   end Event_Receiver;
+   end Event_Client;
 
    package Event_Supervisor is
       type Instance is limited interface;
       subtype Class is Instance'Class;
       type Handle is access all Class;
-      procedure Watch_Event (This : in out Instance; E : Event) is abstract;
-      procedure Analyze_Packet (This : in out Instance;
-                                P : Packet) is abstract;
+      procedure Watch_Parameter (This : in out Instance; E : Event) is null;
+      procedure Watch_Signal (This : in out Instance; E : Event) is null;
+      procedure Watch_Packet (This : in out Instance;
+                              P : Packet_Event) is null;
    end Event_Supervisor;
 
 end Sound.Events;

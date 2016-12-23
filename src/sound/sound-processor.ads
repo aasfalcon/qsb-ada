@@ -9,8 +9,7 @@ package Sound.Processor is
    use Sound.Events;
 
    subtype Parent is Object.Instance;
-   type Instance is abstract new Parent and
-      Event_Receiver.Instance with private;
+   type Instance is abstract new Parent and Event_Client.Instance with private;
    subtype Class is Instance'Class;
    type Handle is access all Class;
 
@@ -25,7 +24,6 @@ package Sound.Processor is
          Is_Muted,         --  Bool    | Produce silence
          Is_Bypassed,      --  Bool    | Don't touch the buffer
          Is_Parallel,      --  Bool    | Process subs in parallel
-         Is_Subs_Before,   --  Bool    | Process subs before main/this
          Super_Id          --  Int     | Super-processor ID
       );
 
@@ -55,7 +53,7 @@ package Sound.Processor is
    package Packets is new Slot_Enum (Packet, Packet_Slot);
 
    overriding
-   function Get_Id (This : Instance) return Receiver_Tag;
+   function Get_Id (This : Instance) return Client_Id;
 
    function Get (This : Instance; Parameter : Parameter_Slot) return Value;
 
@@ -83,18 +81,18 @@ package Sound.Processor is
    procedure Emit (This : Instance; Packet : Packet_Slot;
                    Argument : Data := Empty_Data);
 
-   procedure Process (This : Instance; Buf : in out Buffer.Instance) is null;
+   procedure Process (This : Instance;
+                      Buf : in out Buffer.Instance) is abstract;
    procedure Process_Entry (This : Instance; Buf : in out Buffer.Instance);
 
 private
 
    package Subs_Vectors is new Ada.Containers.Vectors (Positive, Handle);
 
-   type Instance is abstract new Parent and
-      Event_Receiver.Instance with
+   type Instance is abstract new Parent and Event_Client.Instance with
       record
          Bus : Sound.Bus.Handle := null;
-         Id : Receiver_Tag := 0;
+         Id : Client_Id := 0;
          Super : Handle := null;
          Subs : Subs_Vectors.Vector;
 

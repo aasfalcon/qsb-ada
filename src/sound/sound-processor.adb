@@ -1,6 +1,6 @@
 package body Sound.Processor is
 
-   Id_Pool : Receiver_Tag := Empty_Id;
+   Id_Pool : Client_Id := Empty_Id;
 
    overriding
    procedure Initialize (This : in out Instance) is
@@ -16,9 +16,12 @@ package body Sound.Processor is
       This.Disconnect;
    end Finalize;
 
+   overriding
+   function Get_Id (This : Instance) return Client_Id is (This.Id);
+
    function Get (This : Instance; Parameter : Parameter_Slot) return Value is
    begin
-      case Parameters.To_Enum (Parameter) is
+      case Parameters.Enum (Parameter) is
          when Id =>
             return (Int, Integer (This.Id));
 
@@ -33,9 +36,6 @@ package body Sound.Processor is
 
          when Is_Parallel =>
             return (Bool, This.Is_Parallel);
-
-         when Is_Subs_Before =>
-            return (Bool, This.Is_Subs_Before);
 
          when Super_Id =>
             begin
@@ -54,7 +54,7 @@ package body Sound.Processor is
    procedure Set (This : in out Instance; Parameter : Parameter_Slot;
                   Argument : Value) is
    begin
-      case Parameters.To_Enum (Parameter) is
+      case Parameters.Enum (Parameter) is
          when Id =>
             raise Program_Error with "Parameter 'Id' is read-only";
 
@@ -74,14 +74,11 @@ package body Sound.Processor is
          when Is_Parallel =>
             This.Is_Parallel := Argument.Bool;
 
-         when Is_Subs_Before =>
-            This.Is_Subs_Before := Argument.Bool;
-
          when Super_Id =>
             declare
                Super : constant Processor.Handle :=
-                  Processor.Handle (This.Bus.Get_Receiver
-                                    (Receiver_Tag (Argument.Int)));
+                  Processor.Handle (This.Bus.Get_Client
+                                    (Client_Id (Argument.Int)));
                Above : Processor.Handle := Super;
             begin
                while Above /= null loop
@@ -115,11 +112,11 @@ package body Sound.Processor is
    procedure Run (This : in out Instance; Command : Command_Slot;
                   Argument : Value := Empty_Value) is
    begin
-      case Commands.To_Enum (Command) is
+      case Commands.Enum (Command) is
          when Expose =>
             for P in Parameter loop
                declare
-                  Slot : constant Parameter_Slot := Parameters.To_Slot (P);
+                  Slot : constant Parameter_Slot := Parameters.Slot (P);
                begin
                   This.Emit (Slot, This.Get (Slot));
                end;
@@ -127,9 +124,9 @@ package body Sound.Processor is
 
          when Expose_One =>
             declare
-               P : constant Parameter_Slot := Parameter_Slot (Argument.Int);
+               Slot : constant Parameter_Slot := Parameter_Slot (Argument.Int);
             begin
-               This.Emit (P, This.Get (P));
+               This.Emit (Slot, This.Get (Slot));
             end;
 
          when Destroy =>
@@ -149,8 +146,8 @@ package body Sound.Processor is
       if This.Bus /= Bus then
          This.Disconnect;
          This.Bus := Bus;
-         This.Bus.Connect (This'Unchecked_Access);
-         This.Emit (Signals.To_Slot (Connect));
+         This.Bus.Add_Client (This'Unchecked_Access);
+         This.Emit (Signals.Slot (Connect));
       end if;
    end Connect;
 
@@ -158,15 +155,11 @@ package body Sound.Processor is
       use Sound.Bus;
    begin
       if This.Bus /= null then
-         This.Emit (Signals.To_Slot (Disconnect));
-         This.Bus.Disconnect (This'Unchecked_Access);
+         This.Emit (Signals.Slot (Disconnect));
+         This.Bus.Remove_Client (This'Unchecked_Access);
          This.Bus := null;
       end if;
    end Disconnect;
-
-   overriding
-   function Get_Id (This : Instance)
-      return Receiver_Tag is (This.Id);
 
    procedure Emit (This : Instance; Parameter : Parameter_Slot;
                    Argument : Value := Empty_Value) is
@@ -202,15 +195,11 @@ package body Sound.Processor is
       end if;
 
       if This.Subs.Is_Empty then
-         This.Process (Buf);
+         Class (This).Process (Buf);
          return;
       end if;
 
       --  full case
-      if not This.Is_Subs_Before then
-         This.Process (Buf);
-      end if;
-
       if not This.Is_Parallel or else Count = 1 then
          C := This.Subs.First;
 
@@ -243,9 +232,7 @@ package body Sound.Processor is
          end;
       end if;
 
-      if This.Is_Subs_Before then
-         This.Process (Buf);
-      end if;
+      Class (This).Process (Buf);
    end Process_Entry;
 
 end Sound.Processor;

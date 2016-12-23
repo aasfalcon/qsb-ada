@@ -1,4 +1,4 @@
-﻿with Ada.Containers.Ordered_Maps;
+with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Vectors;
 
 with Sound.Constants;
@@ -16,61 +16,61 @@ package Sound.Bus is
    type Handle is access all Class;
 
    type Error is (Output_Underrun, Packet_Underrun, Signal_Underrun,
-                  Unknown_Receiver, Input_Offload, Commands_Offload);
-   function Error_Count (This : Instance; E : Error) return Natural;
+                  Unknown_Client, Input_Offload, Commands_Offload);
+   function Error_Count (This : Instance; Err : Error) return Natural;
    function Has_Errors (This : Instance) return Boolean;
 
-   function Get_Receiver (This : Instance; Id : Receiver_Tag)
-      return Event_Receiver.Handle;
+   function Get_Client (This : in out Instance; Id : Client_Id)
+      return Event_Client.Handle;
 
-   procedure Connect (This : in out Instance;
-                      Receiver : Event_Receiver.Handle);
-   procedure Connect (This : in out Instance;
-                      Supervisor : Event_Supervisor.Handle);
-   procedure Disconnect (This : in out Instance;
-                         Receiver : Event_Receiver.Handle);
-   procedure Disconnect (This : in out Instance;
-                         Supervisor : Event_Supervisor.Handle);
+   procedure Add_Client (This : in out Instance;
+                         Client : Event_Client.Handle);
+   procedure Add_Supervisor (This : in out Instance;
+                             Supervisor : Event_Supervisor.Handle);
+   procedure Remove_Client (This : in out Instance;
+                            Client : Event_Client.Handle);
+   procedure Remove_Supervisor (This : in out Instance;
+                                Supervisor : Event_Supervisor.Handle);
 
-   procedure Emit (This : in out Instance; Id : Receiver_Tag;
+   procedure Emit (This : in out Instance; Id : Client_Id;
                    Parameter : Parameter_Slot; Argument : Value);
-   procedure Emit (This : in out Instance; Id : Receiver_Tag;
-                   Signal : Signal_Slot; Argument : Value);
-   procedure Emit (This : in out Instance; Id : Receiver_Tag;
+   procedure Emit (This : in out Instance; Id : Client_Id;
+                   Signal : Signal_Slot; Argument : Value := Empty_Value);
+   procedure Emit (This : in out Instance; Id : Client_Id;
                    Packet : Packet_Slot; Argument : Data);
 
-   procedure Send (This : in out Instance; Id : Receiver_Tag;
+   procedure Send (This : in out Instance; Id : Client_Id;
                    Parameter : Parameter_Slot; Argument : Value);
-   procedure Send (This : in out Instance; Id : Receiver_Tag;
-                   Command : Command_Slot; Argument : Value);
+   procedure Send (This : in out Instance; Id : Client_Id;
+                   Command : Command_Slot; Argument : Value := Empty_Value);
 
    procedure Dispatch (This : in out Instance);
    procedure Watch (This : in out Instance);
 
 private
 
-   use Ada.Containers, Constants, Event_Receiver, Event_Supervisor;
+   use Ada.Containers, Constants, Event_Client, Event_Supervisor;
 
-   package Receiver_Maps is
-      new Ordered_Maps (Receiver_Tag, Event_Receiver.Handle);
+   package Client_Maps is
+      new Ordered_Maps (Client_Id, Event_Client.Handle);
    package Supervisor_Vectors is
       new Vectors (Natural, Event_Supervisor.Handle);
 
    package Event_Ring is new Ring_Facet (Event);
-   package Packet_Ring is new Ring_Facet (Packet);
+   package Packet_Ring is new Ring_Facet (Packet_Event);
 
    type Error_Counts is array (Error) of Natural;
 
    type Instance is new Parent with
       record
-         Receivers : Receiver_Maps.Map;
+         Clients : Client_Maps.Map;
          Supervisors : Supervisor_Vectors.Vector;
          Errors : Error_Counts := (others => 0);
 
          --  event rings
          Input : Event_Ring.Instance (Input_Bus_Size);
          Output : Event_Ring.Instance (Output_Bus_Size);
-         Packets : Packet_Ring.Instance (Packet_Bus_Size);
+         Packets : Packet_Ring.Instance (Packets_Bus_Size);
          Commands : Event_Ring.Instance (Commands_Bus_Size);
          Signals : Event_Ring.Instance (Signals_Bus_Size);
       end record;

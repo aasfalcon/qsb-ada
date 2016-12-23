@@ -11,10 +11,10 @@ package Common.Random is
    function Make_Bool (This : Instance) return Boolean;
    function Make_Real (This : Instance) return Float;
    function Make_Bound (This : Instance; Min, Max : Natural) return Natural;
-   function Make_Event (This : Instance; Id : Tag) return Event;
-   function Make_Data_Event (This : Instance; Id : Tag) return Data_Event;
+   function Make_Event (This : Instance; Id : Client_Id) return Event;
+   function Make_Packet (This : Instance; Id : Client_Id) return Packet_Event;
    function Make_Value (This : Instance) return Value;
-   function Make_Data_Value (This : Instance) return Data_Value;
+   function Make_Data (This : Instance) return Data;
 
    procedure Initialize (This : in out Instance);
 

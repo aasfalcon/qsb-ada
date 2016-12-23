@@ -2,7 +2,7 @@ with Sound.Constants;
 
 package body Common.Random is
 
-   use Sound;
+   use Sound, Sound.Constants;
 
    function Make_Int (This : Instance)
       return Integer is (Int_Random.Random (This.Int_Gen));
@@ -35,46 +35,46 @@ package body Common.Random is
       end return;
    end Make_Value;
 
-   function Make_Data_Value (This : Instance) return Data_Value is
+   function Make_Data (This : Instance) return Data is
       The_Type : constant Value_Type := Type_Random.Random (This.Type_Gen);
-      Count : constant Natural := This.Make_Bound
-                             (1, Constants.Data_Value_Max_Count);
-      Bool_Elements : Data_Bool_Elements (1 .. Count);
-      Int_Elements : Data_Int_Elements (1 .. Count);
-      Real_Elements : Data_Real_Elements (1 .. Count);
+      Count : constant Natural := This.Make_Bound (1, Packet_Max_Count);
+      Bool_Elements : Data_Bools (1 .. Count);
+      Int_Elements : Data_Ints (1 .. Count);
+      Real_Elements : Data_Reals (1 .. Count);
    begin
-      return Result : Data_Value do
+      return Result : Data do
          case The_Type is
             when Bool =>
                for I in 1 .. Count loop
                   Bool_Elements (I) := This.Make_Bool;
                end loop;
-               Result := (Count, Bool, Bool_Elements);
+               Result := (Bool, Count, Bool_Elements);
 
             when Int =>
                for I in 1 .. Count loop
                   Int_Elements (I) := This.Make_Int;
                end loop;
-               Result := (Count, Int, Int_Elements);
+               Result := (Int, Count, Int_Elements);
 
             when Real =>
                for I in 1 .. Count loop
                   Real_Elements (I) := This.Make_Real;
                end loop;
-               Result := (Count, Real, Real_Elements);
+               Result := (Real, Count, Real_Elements);
 
             when None =>
-               Result := (0, None, others => <>);
+               Result := Empty_Data;
          end case;
       end return;
-   end Make_Data_Value;
+   end Make_Data;
 
-   function Make_Event (This : Instance; Id : Tag)
-      return Event is (Id, This.Make_Bound (0, 10_000), This.Make_Value);
+   function Make_Event (This : Instance; Id : Client_Id)
+      return Event is (Id, Client_Slot (This.Make_Bound (0, 10_000)),
+                     This.Make_Value);
 
-   function Make_Data_Event (This : Instance; Id : Tag)
-      return Data_Event is (Id, This.Make_Bound (0, 10_000),
-                            This.Make_Data_Value);
+   function Make_Packet (This : Instance; Id : Client_Id)
+      return Packet_Event is (Id, Client_Slot (This.Make_Bound (0, 10_000)),
+                              This.Make_Data);
 
    procedure Initialize (This : in out Instance) is
    begin

@@ -1,205 +1,353 @@
 with AUnit.Assertions; use AUnit.Assertions;
 
+with Sound.Bus;
 with Sound.Events;
 with Sound.Constants;
+with Sound.Processor;
 
 package body Sound_Bus_Test is
 
-   use Sound, Sound.Events, Fixture.Sound_Bus_Test;
+   use Fixture.Sound_Bus_Test;
+   use Sound.Constants, Sound.Bus, Sound.Events, Sound.Processor;
 
-   procedure Has_Runner_Test (This : in out Instance) is
+   procedure Error_Count_Test (This : in out Instance) is
+      Underruns, Slot : Natural := 0;
+      Planned_Output : constant Natural := 11;
+      Planned_Signal : constant Natural := 5;
+      Planned_Packet : constant Natural := 17;
+      Output_Count : constant := Output_Bus_Size - 1 + Planned_Output;
+      Signal_Count : constant := Signals_Bus_Size - 1 + Planned_Signal;
+      Packet_Count : constant := Packets_Bus_Size - 1 + Planned_Packet;
+      Unknown : constant Client_Id := This.Processor.Get_Id + 100;
    begin
-      Assert (This.Bus.Has_Runner (This.Processor.Get_Id),
-              "Don't have default runner");
-   end Has_Runner_Test;
-
-   procedure Get_Data_Underruns_Test (This : in out Instance) is
-      Actual_Underruns : Natural;
-      Planned_Underruns : constant := 14;
-      Bus_Size : constant := Constants.Data_Bus_Size - 1;
-      Data : constant Data_Value := (0, None);
-   begin
-      for I in 1 .. Bus_Size + Planned_Underruns loop
-         This.Bus.Show (This.Processor.Get_Id, 0, Data);
+      --  Output_Underrun
+      for I in 1 .. Output_Count loop
+         This.Bus.Emit (This.Processor.Get_Id,
+                        Parameter_Slot (I), Empty_Value);
       end loop;
 
-      Actual_Underruns := This.Bus.Get_Data_Underruns;
-      Assert (Actual_Underruns = Planned_Underruns,
-              "Wrong data underruns, expected:" &
-              Natural'Image (Planned_Underruns) & ", actual:" &
-              Natural'Image (Actual_Underruns));
-   end Get_Data_Underruns_Test;
+      Underruns := This.Bus.Error_Count (Output_Underrun);
+      Assert (Underruns = Planned_Output, "Wrong output underruns, expected:" &
+              Natural'Image (Planned_Output) & ", actual:" &
+              Natural'Image (Underruns));
 
-   procedure Get_Signal_Underruns_Test (This : in out Instance) is
-      Actual_Underruns : Natural;
-      Planned_Underruns : constant := 11;
-      Bus_Size : constant := Constants.Signals_Bus_Size - 1;
-   begin
-      for I in 1 .. Bus_Size + Planned_Underruns loop
-         This.Bus.Emit (This.Processor.Get_Id, 0);
+      This.Bus.Watch;
+      Assert (Positive (This.Received_Parameters.Length) = Output_Bus_Size - 1,
+              "Wrong received parameter count:" &
+              Positive'Image (Positive (This.Received_Parameters.Length)) &
+              ", expected:" & Positive'Image (Output_Bus_Size - 1));
+
+      for I in 1 .. Output_Bus_Size - 1 loop
+         Slot := Natural (This.Received_Parameters.Element (I - 1).Slot);
+         Assert (Slot = I + Underruns,
+                 "Wrong received parameter after drops: expected slot" &
+                 Integer'Image (I + Underruns) & ", received slot" &
+                 Integer'Image (Slot));
       end loop;
 
-      Actual_Underruns := This.Bus.Get_Signal_Underruns;
-      Assert (Actual_Underruns = Planned_Underruns,
-              "Wrong signal underruns, expected:" &
-              Natural'Image (Planned_Underruns) & ", actual:" &
-              Natural'Image (Actual_Underruns));
-   end Get_Signal_Underruns_Test;
+      --  Signal_Underrun
+      for I in 1 .. Signal_Count loop
+         This.Bus.Emit (This.Processor.Get_Id,
+                        Signal_Slot (I), Empty_Value);
+      end loop;
 
-   procedure Add_Runner_Test (This : in out Instance) is
+      Underruns := This.Bus.Error_Count (Signal_Underrun);
+      Assert (Underruns = Planned_Signal, "Wrong signal underruns, expected:" &
+              Natural'Image (Planned_Signal) & ", actual:" &
+              Natural'Image (Underruns));
+
+      This.Bus.Watch;
+      Assert (Positive (This.Received_Signals.Length) = Signals_Bus_Size - 1,
+              "Wrong received signal count:" &
+              Positive'Image (Positive (This.Received_Signals.Length)) &
+              ", expected:" & Positive'Image (Signals_Bus_Size - 1));
+
+      for I in 1 .. Signals_Bus_Size - 1 loop
+         Slot := Natural (This.Received_Signals.Element (I - 1).Slot);
+         Assert (Slot = I + Underruns,
+                 "Wrong received signal after drops: expected slot" &
+                 Integer'Image (I + Underruns) & ", received slot" &
+                 Integer'Image (Slot));
+      end loop;
+
+      --  Packet_Underrun
+      for I in 1 .. Packet_Count loop
+         This.Bus.Emit (This.Processor.Get_Id,
+                        Packet_Slot (I), Empty_Data);
+      end loop;
+
+      Underruns := This.Bus.Error_Count (Packet_Underrun);
+      Assert (Underruns = Planned_Packet, "Wrong packet underruns, expected:" &
+              Natural'Image (Planned_Packet) & ", actual:" &
+              Natural'Image (Underruns));
+
+      This.Bus.Watch;
+      Assert (Positive (This.Received_Packets.Length) = Packets_Bus_Size - 1,
+              "Wrong received packet count:" &
+              Positive'Image (Positive (This.Received_Packets.Length)) &
+              ", expected:" & Positive'Image (Packets_Bus_Size - 1));
+
+      for I in 1 .. Packets_Bus_Size - 1 loop
+         Slot := Natural (This.Received_Packets.Element (I - 1).Slot);
+         Assert (Slot = I + Underruns,
+                 "Wrong received packet after drops: expected slot" &
+                 Integer'Image (I + Underruns) & ", received slot" &
+                 Integer'Image (Slot));
+      end loop;
+
+      --  Unknown_Client
+      This.Bus.Emit (Unknown, Signal_Slot (0));
+      This.Bus.Emit (Unknown, Parameter_Slot (0), Empty_Value);
+      This.Bus.Emit (Unknown, Packet_Slot (0), Empty_Data);
+      This.Bus.Watch;
+
+      This.Bus.Send (Unknown, Command_Slot (0));
+      This.Bus.Send (Unknown, Parameter_Slot (0), Empty_Value);
+      This.Bus.Dispatch;
+
+      Underruns := This.Bus.Error_Count (Unknown_Client);
+      Assert (Underruns = 2, "Expected 2 unknown clients, actual:" &
+              Natural'Image (Underruns));
+
+      --  TODO: offload tests
+   end Error_Count_Test;
+
+   procedure Has_Errors_Test (This : in out Instance) is
    begin
-      This.Bus.Initialize; --  remove default
-      This.Bus.Add_Runner (This.Processor'Unchecked_Access);
-      Assert (This.Bus.Has_Runner (This.Processor.Get_Id),
-              "Don't have runner after add");
-   end Add_Runner_Test;
+      Assert (not This.Bus.Has_Errors, "Has errors on set up");
+      This.Error_Count_Test;
+      Assert (This.Bus.Has_Errors, "Does not indicate existing errors");
+   end Has_Errors_Test;
 
-   procedure Emit_Test (This : in out Instance) is
-      Count : constant := 10;
-      Received : Integer;
+   procedure Get_Client_Test (This : in out Instance) is
+      use Event_Client;
+      Client : Event_Client.Handle :=
+         This.Bus.Get_Client (This.Processor.Get_Id);
+      Unknown_Id : constant Client_Id := This.Processor.Get_Id + 100;
+   begin
+      Assert (Client = Event_Client.Handle (This.Processor),
+              "Wrong client pointer");
+      Client := This.Bus.Get_Client (Unknown_Id);
+      Assert (Client = null, "Not null returned when passed unknown id");
+   end Get_Client_Test;
+
+   procedure Add_Client_Test (This : in out Instance) is
+      use Event_Client;
+      Client : aliased Fixture_Processor;
+      Client_Handle : constant Event_Client.Handle :=
+         Client'Unchecked_Access;
+   begin
+      This.Bus.Add_Client (Client_Handle);
+      Assert (Client_Handle = This.Bus.Get_Client (Client.Get_Id),
+              "Error connecing client");
+   end Add_Client_Test;
+
+   procedure Add_Supervisor_Test (This : in out Instance) is
+      Supervisor : aliased Instance;
+      Supervisor_Handle : constant Event_Supervisor.Handle :=
+         Supervisor'Unchecked_Access;
+   begin
+      This.Bus.Add_Supervisor (Supervisor_Handle);
+      This.Bus.Emit (This.Processor.Get_Id, Signal_Slot (777));
+      This.Bus.Watch;
+      Assert (Integer (Supervisor.Received_Signals.Length) > 0 and then
+              Supervisor.Received_Signals.Element (0).Slot =
+              Client_Slot (777),
+              "Unable to connect supervisor");
+   end Add_Supervisor_Test;
+
+   procedure Remove_Client_Test (This : in out Instance) is
+      use Event_Client;
+      Client_Handle : Event_Client.Handle;
+   begin
+      Client_Handle := This.Bus.Get_Client (This.Processor.Get_Id);
+      Assert (Client_Handle = Event_Client.Handle (This.Processor),
+              "Client is not connected before test");
+
+      This.Bus.Remove_Client (Event_Client.Handle (This.Processor));
+      Client_Handle := This.Bus.Get_Client (This.Processor.Get_Id);
+      Assert (Client_Handle = null, "Cant disconnect client");
+   end Remove_Client_Test;
+
+   procedure Remove_Supervisor_Test (This : in out Instance) is
+      Supervisor : aliased Instance;
+      Supervisor_Handle : constant Event_Supervisor.Handle :=
+         Supervisor'Unchecked_Access;
+   begin
+      This.Bus.Add_Supervisor (Supervisor_Handle);
+      This.Bus.Remove_Supervisor (Supervisor_Handle);
+      This.Bus.Emit (This.Processor.Get_Id, Signal_Slot (777));
+      This.Bus.Watch;
+      Assert (Integer (Supervisor.Received_Signals.Length) = 0,
+              "Unable to disconnect supervisor");
+   end Remove_Supervisor_Test;
+
+   procedure Emit_Parameter_Test (This : in out Instance) is
+      Count : constant Natural := 12;
+      Received : Natural;
       E : Event;
    begin
       for I in 1 .. Count loop
-         This.Bus.Emit (This.Processor.Get_Id, I, (Int, I * 33));
+         This.Bus.Emit (This.Processor.Get_Id,
+                        Parameter_Slot (I), (Int, I * 33));
       end loop;
 
       This.Bus.Watch;
-      Received := Integer (This.Received_Signals.Length);
+      Received := Natural (This.Received_Parameters.Length);
       Assert (Received = Count,
-              "Invalid signal count: sent" & Integer'Image (Count) &
-              ", received" & Integer'Image (Received));
+              "Invalid parameter count: emited" & Natural'Image (Count) &
+              ", watched" & Natural'Image (Received));
+
+      for I in 1 .. Count loop
+         E := This.Received_Parameters.Element (I - 1);
+         Assert (E.Id = This.Processor.Get_Id, "Invalid tag");
+         Assert (E.Slot = Client_Slot (I),
+                 "Invalid slot, sent" & Natural'Image (I) &
+                 ", received" & Client_Slot'Image (E.Slot));
+         Assert (E.Argument.Int = I * 33, "Invalid value");
+      end loop;
+   end Emit_Parameter_Test;
+
+   procedure Emit_Signal_Test (This : in out Instance) is
+      Count : constant Natural := 17;
+      Received : Natural;
+      E : Event;
+   begin
+      for I in 1 .. Count loop
+         This.Bus.Emit (This.Processor.Get_Id,
+                        Signal_Slot (I), (Int, I * 33));
+      end loop;
+
+      This.Bus.Watch;
+      Received := Natural (This.Received_Signals.Length);
+      Assert (Received = Count,
+              "Invalid signal count: sent" & Natural'Image (Count) &
+              ", received" & Natural'Image (Received));
 
       for I in 1 .. Count loop
          E := This.Received_Signals.Element (I - 1);
-         Assert (E.Tag = This.Processor.Get_Id, "Invalid tag");
-         Assert (E.Slot = I,
-                 "Invalid slot, sent" & Integer'Image (I) &
-                 ", received" & Integer'Image (E.Slot));
+         Assert (E.Id = This.Processor.Get_Id, "Invalid tag");
+         Assert (E.Slot = Client_Slot (I),
+                 "Invalid slot, sent" & Natural'Image (I) &
+                 ", received" & Client_Slot'Image (E.Slot));
          Assert (E.Argument.Int = I * 33, "Invalid value");
       end loop;
-   end Emit_Test;
+   end Emit_Signal_Test;
 
-   procedure Show_Test (This : in out Instance) is
-      Count : constant := 10;
-      Received : Integer;
-      D : Data_Event;
+   procedure Emit_Packet_Test (This : in out Instance) is
+      Count : constant Natural := 6;
+      Received : Natural;
+      P : Packet_Event;
    begin
       for I in 1 .. Count loop
-         This.Bus.Show (This.Processor.Get_Id, I, (1, Int,
-                                                   (others => I * 33)));
+         This.Bus.Emit (This.Processor.Get_Id,
+                        Packet_Slot (I), (Int, 1, (others => I * 33)));
       end loop;
 
-      This.Bus.Analyze;
-      Received := Integer (This.Received_Data.Length);
+      This.Bus.Watch;
+      Received := Natural (This.Received_Packets.Length);
       Assert (Received = Count,
-              "Invalid data item count: sent" & Integer'Image (Count) &
-              ", received" & Integer'Image (Received));
+              "Invalid packet count: sent" & Natural'Image (Count) &
+              ", received" & Natural'Image (Received));
 
       for I in 1 .. Count loop
-         D := This.Received_Data.Element (I - 1);
-         Assert (D.Tag = This.Processor.Get_Id, "Invalid tag");
-         Assert (D.Slot = I,
-                 "Invalid slot, sent" & Integer'Image (I) &
-                 ", received" & Integer'Image (D.Slot));
-         Assert (D.Argument.Ints (1) = I * 33, "Invalid value");
+         P := This.Received_Packets.Element (I - 1);
+         Assert (P.Id = This.Processor.Get_Id, "Invalid tag");
+         Assert (P.Slot = Client_Slot (I),
+                 "Invalid slot, sent" & Natural'Image (I) &
+                 ", received" & Client_Slot'Image (P.Slot));
+         Assert (P.Argument.Count = 1 and P.Argument.Ints (1) = I * 33,
+                 "Invalid data");
       end loop;
-   end Show_Test;
+   end Emit_Packet_Test;
 
-   procedure Remove_Runner_Test (This : in out Instance) is
-   begin
-      This.Has_Runner_Test;
-      This.Bus.Remove_Runner (This.Processor.Get_Id);
-      Assert (not This.Bus.Has_Runner (This.Processor.Get_Id),
-              "Still has runner after remove");
-   end Remove_Runner_Test;
-
-   procedure Send_Test (This : in out Instance) is
-      Count : constant := 10;
-      Received : Integer;
+   procedure Send_Parameter_Test (This : in out Instance) is
+      Count : constant := 331;
+      Received : Natural;
+      Slot : Client_Slot;
       E : Event;
    begin
       for I in 1 .. Count loop
-         This.Bus.Send (This.Processor.Get_Id, I, (Int, I * 33));
+         This.Bus.Send (This.Processor.Get_Id,
+                        Parameters.Slot (Is_Muted), (Bool, True));
       end loop;
 
       This.Bus.Dispatch;
-      Received := Integer (This.Processor.Received_Commands.Length);
+      Received := Natural (This.Processor.Received_Parameters.Length);
       Assert (Received = Count,
-              "Invalid command count: sent" & Integer'Image (Count) &
-              ", received" & Integer'Image (Received));
+              "Invalid parameter count: sent" & Natural'Image (Count) &
+              ", received" & Natural'Image (Received));
+
+      Slot := Client_Slot (Parameters.Slot (Is_Muted));
+
+      for I in 1 .. Count loop
+         E := This.Processor.Received_Parameters.Element (I - 1);
+         Assert (E.Id = This.Processor.Get_Id, "Invalid tag");
+         Assert (E.Slot = Slot,
+                 "Invalid slot, sent" & Client_Slot'Image (Slot) &
+                 ", received" & Client_Slot'Image (E.Slot));
+         Assert (E.Argument.Bool, "Invalid value");
+      end loop;
+   end Send_Parameter_Test;
+
+   procedure Send_Command_Test (This : in out Instance) is
+      Count : constant := 12;
+      Received : Natural;
+      Slot : Client_Slot;
+      E : Event;
+   begin
+      for I in 1 .. Count loop
+         This.Bus.Send (This.Processor.Get_Id, Commands.Slot (Expose_One),
+                        (Int, Integer (Parameters.Slot (Is_Muted))));
+      end loop;
+
+      This.Bus.Dispatch;
+      Received := Natural (This.Processor.Received_Commands.Length);
+      Assert (Received = Count,
+              "Invalid command count: sent" & Natural'Image (Count) &
+              ", received" & Natural'Image (Received));
+
+      Slot := Client_Slot (Commands.Slot (Expose_One));
 
       for I in 1 .. Count loop
          E := This.Processor.Received_Commands.Element (I - 1);
-         Assert (E.Tag = This.Processor.Get_Id, "Invalid tag");
-         Assert (E.Slot = I,
-                 "Invalid slot, sent" & Integer'Image (I) &
-                 ", received" & Integer'Image (E.Slot));
-         Assert (E.Argument.Int = I * 33, "Invalid value");
+         Assert (E.Id = This.Processor.Get_Id, "Invalid tag");
+         Assert (E.Slot = Slot,
+                 "Invalid slot, sent" & Client_Slot'Image (Slot) &
+                 ", received" & Client_Slot'Image (E.Slot));
+         Assert (Parameter_Slot (E.Argument.Int) = Parameters.Slot (Is_Muted),
+                 "Invalid value");
       end loop;
-   end Send_Test;
-
-   procedure Set_Watcher_Test (This : in out Instance) is
-      E : constant Event := This.Random.Make_Event (This.Processor.Get_Id);
-   begin
-      This.Bus.Initialize; --  remove default
-      This.Bus.Add_Runner (This.Processor'Unchecked_Access);
-      This.Bus.Set_Watcher (This.Processor.Get_Id, This'Unchecked_Access);
-      This.Bus.Emit (E.Tag, E.Slot, E.Argument);
-      This.Bus.Watch;
-
-      Assert (Integer (This.Received_Signals.Length) > 0,
-              "No signals received");
-      Assert (This.Received_Signals.First_Element = E,
-              "Unable to set watcher");
-   end Set_Watcher_Test;
-
-   procedure Set_Analyzer_Test (This : in out Instance) is
-      E : constant Data_Event :=
-         This.Random.Make_Data_Event (This.Processor.Get_Id);
-   begin
-      This.Bus.Initialize; --  remove default
-      This.Bus.Add_Runner (This.Processor'Unchecked_Access);
-      This.Bus.Set_Analyzer (This.Processor.Get_Id, This'Unchecked_Access);
-      This.Bus.Show (E.Tag, E.Slot, E.Argument);
-      This.Bus.Analyze;
-
-      Assert (Integer (This.Received_Data.Length) > 0, "No data received");
-      Assert (This.Received_Data.First_Element = E, "Unable to set analyzer");
-   end Set_Analyzer_Test;
-
-   procedure Dispatch_Test (This : in out Instance) is
-      use Event_Vectors;
-      Sent, Received : Natural;
-      SC, RC : Cursor;
-   begin
-      This.Random_Fill (Fill_Commands);
-      This.Bus.Dispatch;
-
-      Sent := Natural (This.Reference.Commands.Length);
-      Received := Natural (This.Processor.Received_Commands.Length);
-      Assert (Sent = Received,
-              "Commands count mismatch: sent" & Natural'Image (Sent) &
-              ", received" & Natural'Image (Received));
-
-      SC := This.Reference.Commands.First;
-      RC := This.Processor.Received_Commands.First;
-
-      while SC /= No_Element loop
-         Assert (Element (SC) = Element (RC),
-                 "Sent/received commands buffers differ");
-         Next (SC);
-         Next (RC);
-      end loop;
-   end Dispatch_Test;
+   end Send_Command_Test;
 
    procedure Watch_Test (This : in out Instance) is
       use Event_Vectors;
       Sent, Received : Natural;
       SC, RC : Cursor;
    begin
+      This.Random_Fill (Fill_Output);
       This.Random_Fill (Fill_Signals);
+      This.Random_Fill (Fill_Packets);
       This.Bus.Watch;
 
+      --  parameters
+      Sent := Natural (This.Reference.Output.Length);
+      Received := Natural (This.Received_Parameters.Length);
+      Assert (Sent = Received,
+              "Parameter count mismatch: sent" & Natural'Image (Sent) &
+              ", received" & Natural'Image (Received));
+
+      SC := This.Reference.Output.First;
+      RC := This.Received_Parameters.First;
+
+      while SC /= No_Element loop
+         Assert (Element (SC) = Element (RC),
+                 "Sent/received parameters buffers differ");
+         Next (SC);
+         Next (RC);
+      end loop;
+
+      --  signals
       Sent := Natural (This.Reference.Signals.Length);
       Received := Natural (This.Received_Signals.Length);
       Assert (Sent = Received,
@@ -215,87 +363,129 @@ package body Sound_Bus_Test is
          Next (SC);
          Next (RC);
       end loop;
+
+      --  packets
+      declare
+         use Packet_Vectors;
+         SPC, RPC : Packet_Vectors.Cursor;
+      begin
+         Sent := Natural (This.Reference.Packets.Length);
+         Received := Natural (This.Received_Packets.Length);
+         Assert (Sent = Received,
+                 "Packets count mismatch: sent" & Natural'Image (Sent) &
+                 ", received" & Natural'Image (Received));
+
+         SPC := This.Reference.Packets.First;
+         RPC := This.Received_Packets.First;
+
+         while SPC /= Packet_Vectors.No_Element loop
+            Assert (Element (SPC) = Element (RPC),
+                    "Sent/received packets buffers differ");
+            Next (SPC);
+            Next (RPC);
+         end loop;
+      end;
    end Watch_Test;
 
-   procedure Stress_Emit_Test (This : in out Instance) is
-      Underruns_Planned : constant := 22;
-      Underruns : Natural := 0;
+   procedure Dispatch_Test (This : in out Instance) is
+      use Event_Vectors;
+      Sent, Received : Natural;
+      SC, RC : Cursor;
    begin
-      for I in 1 .. Constants.Signals_Bus_Size - 1 + Underruns_Planned loop
-         This.Bus.Emit (This.Processor.Get_Id, I);
+      This.Random_Fill (Fill_Commands);
+      This.Random_Fill (Fill_Input);
+      This.Bus.Dispatch;
+
+      Assert (not This.Bus.Has_Errors, "Unexpected bus errors - " &
+              "Unknown_Client:" &
+              Integer'Image (This.Bus.Error_Count (Unknown_Client)));
+
+      --  commands
+      Sent := Natural (This.Reference.Commands.Length);
+      Received := Natural (This.Processor.Received_Commands.Length);
+      Assert (Sent = Received,
+              "Commands count mismatch: sent" & Natural'Image (Sent) &
+              ", received" & Natural'Image (Received));
+
+      SC := This.Reference.Commands.First;
+      RC := This.Processor.Received_Commands.First;
+
+      while SC /= No_Element loop
+         Assert (Element (SC) = Element (RC),
+                 "Sent/received commands buffers differ");
+         Next (SC);
+         Next (RC);
       end loop;
 
-      Underruns := This.Bus.Get_Signal_Underruns;
-      Assert (Underruns = Underruns_Planned,
-              "Planned and actual signal drops do not match: planned" &
-              Integer'Image (Underruns_Planned) & ", actual" &
-              Integer'Image (Underruns));
+      --  parameters
+      Sent := Natural (This.Reference.Input.Length);
+      Received := Natural (This.Processor.Received_Parameters.Length);
+      Assert (Sent = Received,
+              "Parameters count mismatch: sent" & Natural'Image (Sent) &
+              ", received" & Natural'Image (Received));
 
-      This.Bus.Watch;
-      Assert (Integer (This.Received_Signals.Length) =
-              Constants.Signals_Bus_Size - 1,
-              "Wrong received signal count");
+      SC := This.Reference.Input.First;
+      RC := This.Processor.Received_Parameters.First;
 
-      for I in 1 .. Constants.Signals_Bus_Size - 1 loop
-         Assert (This.Received_Signals.Element (I - 1).Slot = I + Underruns,
-                 "Wrong received data after drops: expected" &
-                 Integer'Image (I + Underruns) & ", received" &
-                 Integer'Image (This.Received_Signals.Element (I - 1).Slot));
+      while SC /= No_Element loop
+         Assert (Element (SC) = Element (RC),
+                 "Sent/received paremeters buffers differ");
+         Next (SC);
+         Next (RC);
       end loop;
-   end Stress_Emit_Test;
+   end Dispatch_Test;
 
-   procedure Stress_Show_Test (This : in out Instance) is
-      Underruns_Planned : constant := 22;
-      Underruns : Natural := 0;
-   begin
-      for I in 1 .. Constants.Data_Bus_Size - 1 + Underruns_Planned loop
-         This.Bus.Show (This.Processor.Get_Id, I, (others => <>));
-      end loop;
-
-      Underruns := This.Bus.Get_Data_Underruns;
-      Assert (Underruns = Underruns_Planned,
-              "Planned and actual data drops do not match: planned" &
-              Integer'Image (Underruns_Planned) & ", actual" &
-              Integer'Image (Underruns));
-
-      This.Bus.Analyze;
-      Assert (Integer (This.Received_Data.Length) =
-              Constants.Data_Bus_Size - 1,
-              "Wrong received data count");
-
-      for I in 1 .. Constants.Data_Bus_Size - 1 loop
-         Assert (This.Received_Data.Element (I - 1).Slot = I + Underruns,
-                 "Wrong received data value after drops: expected" &
-                 Integer'Image (I + Underruns) & ", received" &
-                 Integer'Image (This.Received_Data.Element (I - 1).Slot));
-      end loop;
-   end Stress_Show_Test;
-
-   procedure Stress_Send_Test (This : in out Instance) is
-      Stress_Dispatches_Planned : constant := 3;
-      Send_Count : constant := Stress_Dispatches_Planned *
-                               (Constants.Commands_Bus_Size - 1) + 1;
+   procedure Offload_Test (This : in out Instance) is
+      Command_Stress_Count : constant := 3;
+      Parameter_Stress_Count : constant := 5;
+      Command_Send_Count : constant := Command_Stress_Count *
+                                       (Commands_Bus_Size - 1) + 1;
+      Parameter_Send_Count : constant := Parameter_Stress_Count *
+                                         (Input_Bus_Size - 1) + 1;
       Received, Value : Natural;
    begin
-      for I in 1 .. Send_Count loop
-         This.Bus.Send (This.Processor.Get_Id, I);
+      --  commands
+      for I in 1 .. Command_Send_Count loop
+         This.Bus.Send (This.Processor.Get_Id,
+                        Commands.Slot (Expose_One),
+                        (Int, Integer (Parameters.Slot (Is_Muted))));
       end loop;
 
       Received := Natural (This.Processor.Received_Commands.Length);
-      Assert (Received = Send_Count - 1,
+      Assert (Received = Command_Send_Count - 1,
               "Wrong command count received: expected" &
-              Integer'Image (Send_Count - 1) & ", received" &
+              Integer'Image (Command_Send_Count - 1) & ", received" &
               Integer'Image (Received));
 
-      This.Bus.Dispatch; --  last one
+      This.Bus.Dispatch; --  single last
 
-      for I in 1 .. Send_Count loop
-         Value := This.Processor.Received_Commands.Element (I - 1).Slot;
-         Assert (Value = I,
-                 "Wrong received command order: expected value" &
-                 Integer'Image (I) & ", actual value" &
-                 Integer'Image (Value));
+      for I in 1 .. Command_Send_Count loop
+         Value := Integer (This.Processor.Received_Commands.
+                           Element (I - 1).Slot);
+         Assert (Command_Slot (Value) = Commands.Slot (Expose_One),
+                 "Wrong received command");
       end loop;
-   end Stress_Send_Test;
+
+      --  parameters
+      for I in 1 .. Parameter_Send_Count loop
+         This.Bus.Send (This.Processor.Get_Id,
+                        Parameters.Slot (Is_Muted), (Bool, True));
+      end loop;
+
+      Received := Natural (This.Processor.Received_Parameters.Length);
+      Assert (Received = Parameter_Send_Count - 1,
+              "Wrong parameter count received: expected" &
+              Integer'Image (Parameter_Send_Count - 1) & ", received" &
+              Integer'Image (Received));
+
+      This.Bus.Dispatch; --  single last
+
+      for I in 1 .. Parameter_Send_Count loop
+         Value := Integer (This.Processor.Received_Parameters.
+                           Element (I - 1).Slot);
+         Assert (Parameter_Slot (Value) = Parameters.Slot (Is_Muted),
+                 "Wrong received parameter");
+      end loop;
+   end Offload_Test;
 
 end Sound_Bus_Test;

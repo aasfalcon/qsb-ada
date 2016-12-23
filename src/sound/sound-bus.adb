@@ -1,7 +1,7 @@
 package body Sound.Bus is
 
-   function Error_Count (This : Instance; E : Error)
-      return Natural is (This.Errors (E));
+   function Error_Count (This : Instance; Err : Error)
+      return Natural is (This.Errors (Err));
 
    function Has_Errors (This : Instance) return Boolean is
    begin
@@ -14,46 +14,46 @@ package body Sound.Bus is
       return False;
    end Has_Errors;
 
-   function Get_Receiver (This : Instance; Id : Receiver_Tag)
-      return Event_Receiver.Handle is
-      use Receiver_Maps;
+   function Get_Client (This : in out Instance; Id : Client_Id)
+      return Event_Client.Handle is
    begin
-      if This.Receivers.Find (Id) = No_Element then
-         return null;
-      end if;
+      return This.Clients.Element (Id);
+   exception
+      when Constraint_Error =>
+         This.Errors (Unknown_Client) :=
+            This.Errors (Unknown_Client) + 1;
+      return null;
+   end Get_Client;
 
-      return This.Receivers.Element (Id);
-   end Get_Receiver;
-
-   procedure Connect (This : in out Instance;
-                      Receiver : Event_Receiver.Handle) is
+   procedure Add_Client (This : in out Instance;
+                         Client : Event_Client.Handle) is
    begin
-      This.Receivers.Insert (Receiver.Get_Id, Receiver);
-   end Connect;
+      This.Clients.Insert (Client.Get_Id, Client);
+   end Add_Client;
 
-   procedure Connect (This : in out Instance;
-                      Supervisor : Event_Supervisor.Handle) is
+   procedure Add_Supervisor (This : in out Instance;
+                             Supervisor : Event_Supervisor.Handle) is
    begin
       This.Supervisors.Append (Supervisor);
-   end Connect;
+   end Add_Supervisor;
 
-   procedure Disconnect (This : in out Instance;
-                         Receiver : Event_Receiver.Handle) is
+   procedure Remove_Client (This : in out Instance;
+                            Client : Event_Client.Handle) is
    begin
-      This.Receivers.Delete (Receiver.Get_Id);
-   end Disconnect;
+      This.Clients.Delete (Client.Get_Id);
+   end Remove_Client;
 
-   procedure Disconnect (This : in out Instance;
-                         Supervisor : Event_Supervisor.Handle) is
+   procedure Remove_Supervisor (This : in out Instance;
+                                Supervisor : Event_Supervisor.Handle) is
       use Supervisor_Vectors;
       C : Cursor := This.Supervisors.Find (Supervisor);
    begin
       This.Supervisors.Delete (C);
-   end Disconnect;
+   end Remove_Supervisor;
 
-   procedure Emit (This : in out Instance; Id : Receiver_Tag;
+   procedure Emit (This : in out Instance; Id : Client_Id;
                    Parameter : Parameter_Slot; Argument : Value) is
-      E : constant Event := (Id, Receiver_Slot (Parameter), Argument);
+      E : constant Event := (Id, Client_Slot (Parameter), Argument);
    begin
       This.Output.Push (E);
    exception
@@ -63,9 +63,9 @@ package body Sound.Bus is
          This.Output.Push (E);
    end Emit;
 
-   procedure Emit (This : in out Instance; Id : Receiver_Tag;
-                   Signal : Signal_Slot; Argument : Value) is
-      E : constant Event := (Id, Receiver_Slot (Signal), Argument);
+   procedure Emit (This : in out Instance; Id : Client_Id;
+                   Signal : Signal_Slot; Argument : Value := Empty_Value) is
+      E : constant Event := (Id, Client_Slot (Signal), Argument);
    begin
       This.Signals.Push (E);
    exception
@@ -75,9 +75,9 @@ package body Sound.Bus is
          This.Signals.Push (E);
    end Emit;
 
-   procedure Emit (This : in out Instance; Id : Receiver_Tag;
+   procedure Emit (This : in out Instance; Id : Client_Id;
                    Packet : Packet_Slot; Argument : Data) is
-      P : constant Events.Packet := (Id, Receiver_Slot (Packet), Argument);
+      P : constant Packet_Event := (Id, Client_Slot (Packet), Argument);
    begin
       This.Packets.Push (P);
    exception
@@ -87,9 +87,9 @@ package body Sound.Bus is
          This.Packets.Push (P);
    end Emit;
 
-   procedure Send (This : in out Instance; Id : Receiver_Tag;
+   procedure Send (This : in out Instance; Id : Client_Id;
                    Parameter : Parameter_Slot; Argument : Value) is
-      E : constant Event := (Id, Receiver_Slot (Parameter), Argument);
+      E : constant Event := (Id, Client_Slot (Parameter), Argument);
    begin
       This.Input.Push (E);
    exception
@@ -98,9 +98,9 @@ package body Sound.Bus is
          This.Input.Push (E);
    end Send;
 
-   procedure Send (This : in out Instance; Id : Receiver_Tag;
-                   Command : Command_Slot; Argument : Value) is
-      E : constant Event := (Id, Receiver_Slot (Command), Argument);
+   procedure Send (This : in out Instance; Id : Client_Id;
+                   Command : Command_Slot; Argument : Value := Empty_Value) is
+      E : constant Event := (Id, Client_Slot (Command), Argument);
    begin
       This.Commands.Push (E);
    exception
@@ -110,74 +110,68 @@ package body Sound.Bus is
    end Send;
 
    procedure Dispatch (This : in out Instance) is
-      use Receiver_Maps;
+      use Client_Maps;
       E : Event;
+      Client : Event_Client.Handle;
    begin
       while not This.Input.Is_Empty loop
-         begin
-            This.Input.Pop (E);
-            Element (This.Receivers.Find (E.Id)).
-               Set (Parameter_Slot (E.Slot), E.Argument);
-         exception
-            when Constraint_Error =>
-               This.Errors (Unknown_Receiver) :=
-                  This.Errors (Unknown_Receiver) + 1;
-         end;
+         This.Input.Pop (E);
+         Client := This.Get_Client (E.Id);
+
+         if Client /= null then
+            Client.Set (Parameter_Slot (E.Slot), E.Argument);
+         end if;
       end loop;
 
       while not This.Commands.Is_Empty loop
-         begin
-            This.Commands.Pop (E);
-            Element (This.Receivers.Find (E.Id)).
-               Run (Command_Slot (E.Slot), E.Argument);
-         exception
-            when Constraint_Error =>
-               This.Errors (Unknown_Receiver) :=
-                  This.Errors (Unknown_Receiver) + 1;
-         end;
+         This.Commands.Pop (E);
+         Client := This.Get_Client (E.Id);
+
+         if Client /= null then
+            Client.Run (Command_Slot (E.Slot), E.Argument);
+         end if;
       end loop;
    end Dispatch;
 
    procedure Watch (This : in out Instance) is
       use Supervisor_Vectors;
-      procedure Propagate_Event (E : Event);
-      procedure Propagate_Packet (P : Events.Packet);
-
-      procedure Propagate_Event (E : Event) is
-         C : Cursor := This.Supervisors.First;
-      begin
-         while C /= No_Element loop
-            Element (C).Watch_Event (E);
-            Next (C);
-         end loop;
-      end Propagate_Event;
-
-      procedure Propagate_Packet (P : Events.Packet) is
-         C : Cursor := This.Supervisors.First;
-      begin
-         while C /= No_Element loop
-            Element (C).Analyze_Packet (P);
-            Next (C);
-         end loop;
-      end Propagate_Packet;
-
+      C : Cursor;
       E : Event;
-      P : Packet;
+      P : Packet_Event;
    begin
-      if not This.Supervisors.Is_Empty then
+      if This.Supervisors.Is_Empty then
+         This.Output.Clear;
+         This.Signals.Clear;
+         This.Packets.Clear;
+      else
          while not This.Output.Is_Empty loop
             This.Output.Pop (E);
-            Propagate_Event (E);
+            C := This.Supervisors.First;
+
+            while C /= No_Element loop
+               Element (C).Watch_Parameter (E);
+               Next (C);
+            end loop;
          end loop;
 
          while not This.Signals.Is_Empty loop
             This.Signals.Pop (E);
-            Propagate_Event (E);
+            C := This.Supervisors.First;
+
+            while C /= No_Element loop
+               Element (C).Watch_Signal (E);
+               Next (C);
+            end loop;
          end loop;
 
          while not This.Packets.Is_Empty loop
             This.Packets.Pop (P);
-            Propagate_Packet (P);
+            C := This.Supervisors.First;
+
+            while C /= No_Element loop
+               Element (C).Watch_Packet (P);
+               Next (C);
+            end loop;
          end loop;
       end if;
    end Watch;
@@ -186,6 +180,6 @@ package body Sound.Bus is
    begin
       This.Errors (What) := This.Errors (What) + 1;
       This.Dispatch;
-   end;
+   end Offload;
 
 end Sound.Bus;
